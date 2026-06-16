@@ -3,830 +3,1217 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Recorrido virtual museo — mové la cámara, apuntá a una obra y escaneala en 3D.">
-<title>Recorrido Virtual Museo</title>
+<meta name="description" content="ArtAlive — Museo Interactivo AR: escaneá obras en 3D, escaneálas y conversá con el personaje.">
+<title>ArtAlive — Museo Interactivo AR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Saira:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <style>
-
-* { box-sizing: border-box; }
-
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #14110f;
-  font-family: "Saira", sans-serif;
-  font-optical-sizing: auto;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg-deep:#0b0907;
+  --bg-dark:#13100d;
+  --bg-panel:#1c1812;
+  --bg-card:#242018;
+  --bg-card-hover:#2e2920;
+  --gold:#c9a252;
+  --gold-dim:#8a6c34;
+  --cream:#ede5d3;
+  --cream-dim:#9a9080;
+  --green-ar:#4fe880;
+  --red-ob:#b53832;
+  --border:#2f2a1e;
+  --scan-active:#5be870;
 }
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-deep);font-family:'Saira',sans-serif;-webkit-tap-highlight-color:transparent;user-select:none;}
+body{visibility:hidden;}
+body.ready{visibility:visible;}
 
-body { visibility: hidden; }
-body.visible { visibility: visible; }
-
-#pantalla-carga {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  background: radial-gradient(ellipse at center, #2a2118 0%, #100d0a 75%);
-  z-index: 10010;
-  transition: opacity 0.7s ease;
+/* ===== PANTALLA BIENVENIDA ===== */
+#screen-welcome{
+  position:fixed;inset:0;z-index:12000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse 80% 90% at 50% 60%,#1f1810 0%,#080604 80%);
+  transition:opacity 0.8s ease;
 }
-#pantalla-carga.fade-out { opacity: 0; pointer-events: none; }
-#titulo-principal { text-align: center; color: #e9dfce; margin-bottom: 2.5rem; padding: 0 1.5rem; }
-#titulo-principal h1 { font-size: 1.9rem; font-weight: 600; letter-spacing: 0.06em; margin: 0; text-shadow: 0 0 0.4rem rgba(0,0,0,0.5); }
-#titulo-principal p { font-size: 0.85rem; opacity: 0.65; margin: 0.6rem 0 0; letter-spacing: 0.04em; }
-#boton-comenzar {
-  padding: 0.8em 2em; font-size: 1.05em; font-family: inherit; font-weight: 600; letter-spacing: 0.03em;
-  background-color: #952A2E; color: #f4ece1; border: none; border-radius: 2px; cursor: pointer;
-  transition: background-color 0.25s ease, transform 0.15s ease;
+#screen-welcome.fade-out{opacity:0;pointer-events:none;}
+.welcome-line{width:160px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:0 auto;}
+#welcome-logo{
+  text-align:center;padding:2rem 2rem;
 }
-#boton-comenzar:hover { background-color: #b3373c; }
-#boton-comenzar:active { transform: scale(0.97); }
-
-/* ---------- Sala 360 (vista de cámara) ---------- */
-#vista-sala {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  z-index: 9000;
-  display: none;
+#welcome-logo h1{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(3rem,8vw,5.5rem);
+  font-weight:700;
+  color:var(--cream);
+  letter-spacing:0.04em;
+  line-height:1;
+  text-shadow:0 0 80px rgba(201,162,82,0.25);
 }
-#vista-sala.activa { display: block; }
-#contenedor-sala { position: absolute; inset: 0; }
-#contenedor-sala canvas { display: block; touch-action: none; }
-
-#marco-escaneo {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(58vw, 230px);
-  height: min(58vw, 230px);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  transition: border-color 0.25s ease;
+#welcome-logo .tagline{
+  font-size:0.8rem;font-weight:300;letter-spacing:0.25em;
+  color:var(--gold);margin-top:0.6rem;text-transform:uppercase;
 }
-#marco-escaneo .esquina {
-  position: absolute;
-  width: 30px;
-  height: 30px;
-  border: 2.5px solid #d9c79a;
-  opacity: 0.8;
-  transition: border-color 0.25s ease, opacity 0.25s ease;
+#welcome-desc{
+  font-size:0.9rem;color:var(--cream-dim);text-align:center;
+  max-width:340px;line-height:1.7;padding:1.5rem 2rem;
 }
-#marco-escaneo.enganchado .esquina { border-color: #7fd98a; opacity: 1; }
-#marco-escaneo .esquina.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
-#marco-escaneo .esquina.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
-#marco-escaneo .esquina.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
-#marco-escaneo .esquina.br { bottom: 0; right: 0; border-left: none; border-top: none; }
-
-#linea-escaneo {
-  position: absolute;
-  left: 4%; right: 4%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #d9c79a, transparent);
-  top: 8%;
-  animation: barrido 2.1s ease-in-out infinite;
-  box-shadow: 0 0 8px 1px rgba(217,199,154,0.5);
+.obra-preview-strip{
+  display:flex;gap:2rem;padding:1rem 2rem;margin:0.5rem 0;
 }
-#marco-escaneo.enganchado #linea-escaneo { animation-play-state: paused; opacity: 0; }
-@keyframes barrido {
-  0% { top: 8%; opacity: 0.9; }
-  48% { top: 88%; opacity: 0.9; }
-  50% { opacity: 0; }
-  52% { top: 8%; opacity: 0; }
-  60% { opacity: 0.9; }
-  100% { top: 8%; opacity: 0.9; }
+.obra-dot{text-align:center;}
+.obra-dot-icon{font-size:2rem;display:block;}
+.obra-dot-name{font-size:0.65rem;color:var(--cream-dim);letter-spacing:0.05em;margin-top:4px;}
+#btn-enter{
+  margin-top:1.5rem;
+  padding:0.85em 2.5em;
+  font-family:'Saira',sans-serif;font-size:0.9rem;font-weight:600;
+  letter-spacing:0.1em;text-transform:uppercase;
+  background:var(--gold);color:#0b0907;
+  border:none;border-radius:2px;cursor:pointer;
+  transition:background 0.2s,transform 0.15s;
+}
+#btn-enter:hover{background:#ddb868;}
+#btn-enter:active{transform:scale(0.97);}
+.welcome-footer{
+  position:absolute;bottom:20px;
+  font-size:0.65rem;color:var(--border);letter-spacing:0.08em;
 }
 
-#estado-escaneo {
-  position: absolute;
-  bottom: 16%;
-  left: 0; right: 0;
-  text-align: center;
-  color: #e9dfce;
-  font-size: 0.92rem;
-  letter-spacing: 0.04em;
-  padding: 0 1.5rem;
-  min-height: 1.4em;
-  pointer-events: none;
-  text-shadow: 0 1px 5px rgba(0,0,0,0.7);
+/* ===== GALERÍA ===== */
+#screen-gallery{
+  position:fixed;inset:0;z-index:11000;
+  display:none;flex-direction:column;
+  background:var(--bg-dark);
+  overflow:hidden;
 }
-#estado-escaneo .punto-pulso {
-  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-  background: #c9a26a; margin-right: 8px; vertical-align: middle;
-  animation: pulso 1.1s ease-in-out infinite;
+#screen-gallery.activa{display:flex;}
+.gallery-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 24px;
+  background:var(--bg-panel);
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
 }
-#estado-escaneo.enganchado .punto-pulso { background: #7fd98a; }
-@keyframes pulso { 0%,100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.1); } }
+.gh-logo{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold);font-weight:700;}
+.gh-ar-badge{
+  font-size:0.65rem;font-weight:600;letter-spacing:0.12em;
+  color:var(--green-ar);
+  padding:4px 10px;border:1px solid rgba(79,232,128,0.35);border-radius:99px;
+}
+.gallery-title-area{
+  padding:28px 28px 16px;flex-shrink:0;
+}
+.gallery-title-area h2{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(1.4rem,3vw,2rem);color:var(--cream);font-weight:400;
+}
+.gallery-title-area p{
+  font-size:0.8rem;color:var(--cream-dim);margin-top:5px;letter-spacing:0.04em;
+}
+.gallery-divider{width:60px;height:1px;background:var(--gold-dim);margin:14px 28px;}
+.gallery-cards{
+  display:flex;gap:16px;padding:4px 28px 28px;
+  overflow-x:auto;overflow-y:hidden;
+  flex:1;align-items:stretch;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+.obra-card{
+  min-width:220px;max-width:260px;flex:1;
+  background:var(--bg-card);
+  border:1px solid var(--border);border-radius:3px;
+  cursor:pointer;
+  transition:border-color 0.25s,transform 0.2s;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.obra-card:hover{border-color:var(--gold-dim);transform:translateY(-3px);}
+.obra-card-img{
+  height:180px;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;flex-shrink:0;
+}
+.obra-card-canvas{position:absolute;inset:0;width:100%;height:100%;}
+.obra-card-ar-chip{
+  position:absolute;top:8px;right:8px;
+  font-size:0.55rem;font-weight:700;letter-spacing:0.12em;
+  background:var(--green-ar);color:#040a05;
+  padding:3px 8px;border-radius:2px;
+}
+.obra-card-body{padding:14px 16px 18px;flex:1;display:flex;flex-direction:column;}
+.obra-card-meta{font-size:0.65rem;letter-spacing:0.08em;color:var(--gold);margin-bottom:6px;}
+.obra-card-title{
+  font-family:'Playfair Display',serif;
+  font-size:1rem;color:var(--cream);line-height:1.3;
+}
+.obra-card-artist{font-size:0.75rem;color:var(--cream-dim);margin-top:4px;}
+.obra-card-desc{
+  font-size:0.72rem;color:#5a5248;margin-top:8px;line-height:1.5;flex:1;
+}
+.obra-card-cta{
+  margin-top:14px;
+  font-size:0.7rem;font-weight:600;letter-spacing:0.08em;
+  color:var(--gold);text-transform:uppercase;
+  opacity:0;transition:opacity 0.2s;
+}
+.obra-card:hover .obra-card-cta{opacity:1;}
 
-#boton-tap-escanear {
-  position: absolute;
-  bottom: 5%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(40,35,28,0.55);
-  border: 1px solid rgba(217,199,154,0.4);
-  color: rgba(233,223,206,0.45);
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  padding: 0.6em 1.5em;
-  border-radius: 999px;
-  cursor: not-allowed;
-  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease, transform 0.15s ease;
+/* ===== SALA 3D ===== */
+#screen-sala{
+  position:fixed;inset:0;z-index:10000;
+  display:none;background:#111008;
 }
-#boton-tap-escanear.habilitado {
-  background: rgba(127,217,138,0.18);
-  border-color: rgba(127,217,138,0.7);
-  color: #eaf7ec;
-  cursor: pointer;
+#screen-sala.activa{display:block;}
+#sala-canvas-wrap{position:absolute;inset:0;}
+#sala-canvas-wrap canvas{display:block;touch-action:none;}
+
+.scan-frame{
+  position:absolute;top:50%;left:50%;
+  width:min(56vw,220px);height:min(56vw,220px);
+  transform:translate(-50%,-50%);
+  pointer-events:none;
 }
-#boton-tap-escanear.habilitado:active { transform: translateX(-50%) scale(0.96); }
-
-#indicador-arrastre {
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(20,17,15,0.55);
-  border: 1px solid rgba(217,199,154,0.3);
-  color: #d9c79a;
-  font-size: 0.68rem;
-  letter-spacing: 0.03em;
-  padding: 5px 13px;
-  border-radius: 999px;
-  z-index: 50;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.4s ease;
-  white-space: nowrap;
+.sf-corner{
+  position:absolute;width:26px;height:26px;
+  border:2.5px solid rgba(217,199,154,0.6);
+  transition:border-color 0.25s;
 }
-#indicador-arrastre.visible { opacity: 0.85; }
+.sf-corner.tl{top:0;left:0;border-right:none;border-bottom:none;}
+.sf-corner.tr{top:0;right:0;border-left:none;border-bottom:none;}
+.sf-corner.bl{bottom:0;left:0;border-right:none;border-top:none;}
+.sf-corner.br{bottom:0;right:0;border-left:none;border-top:none;}
+.scan-frame.locked .sf-corner{border-color:var(--scan-active);}
 
-/* ---------- Escena 3D (objeto escaneado) ---------- */
-#escena-3d {
-  position: fixed;
-  inset: 0;
-  z-index: 9500;
-  display: none;
-  background: transparent;
+#scan-line{
+  position:absolute;left:6%;right:6%;height:1.5px;
+  background:linear-gradient(90deg,transparent,rgba(217,199,154,0.7),transparent);
+  top:8%;animation:scan-anim 2.2s ease-in-out infinite;
+  box-shadow:0 0 6px 1px rgba(217,199,154,0.3);
 }
-#escena-3d.activa { display: block; }
-#escena-3d canvas { display: block; touch-action: none; }
-
-.boton-ui {
-  position: fixed;
-  background: rgba(20,17,15,0.5);
-  width: 42px; height: 42px;
-  border-radius: 50%;
-  border: 1px solid rgba(217,199,154,0.35);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  z-index: 9999;
-  transition: transform 0.2s ease, background 0.2s ease;
+.scan-frame.locked #scan-line{animation-play-state:paused;opacity:0;}
+@keyframes scan-anim{
+  0%{top:8%;opacity:1;}50%{top:88%;opacity:1;}
+  51%{opacity:0;}52%{top:8%;}60%{opacity:1;}100%{top:8%;}
 }
-.boton-ui:hover { transform: scale(1.08); background: rgba(20,17,15,0.75); }
-.boton-ui svg { width: 19px; height: 19px; stroke: #e9dfce; fill: none; }
 
-#boton-cerrar { top: 18px; left: 16px; display: none; }
-#boton-cerrar.activo { display: flex; }
-#boton-reset-vista { top: 18px; right: 16px; display: none; }
-#boton-reset-vista.activo { display: flex; }
-
-#etiqueta-obra {
-  position: fixed;
-  bottom: 28px;
-  left: 0; right: 0;
-  text-align: center;
-  color: #e9dfce;
-  font-size: 0.8rem;
-  letter-spacing: 0.05em;
-  opacity: 0;
-  transition: opacity 0.6s ease;
-  z-index: 9600;
-  pointer-events: none;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+#scan-status{
+  position:absolute;bottom:15%;left:0;right:0;text-align:center;
+  color:var(--cream);font-size:0.85rem;letter-spacing:0.05em;
+  pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,0.8);
 }
-#etiqueta-obra.visible { opacity: 0.75; }
+.pulse-dot{
+  display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--gold);margin-right:8px;vertical-align:middle;
+  animation:pulse 1.1s ease-in-out infinite;
+}
+.scan-frame.locked~#scan-status .pulse-dot{background:var(--scan-active);}
+@keyframes pulse{0%,100%{opacity:0.4;transform:scale(0.85);}50%{opacity:1;transform:scale(1.1);}}
 
-@media screen and (max-width: 480px) {
-  #titulo-principal h1 { font-size: 1.5rem; }
+#btn-scan{
+  position:absolute;bottom:5%;left:50%;transform:translateX(-50%);
+  background:rgba(20,16,10,0.5);
+  border:1px solid rgba(217,199,154,0.3);
+  color:rgba(237,229,211,0.4);
+  font-family:'Saira',sans-serif;font-size:0.8rem;font-weight:500;
+  letter-spacing:0.05em;padding:0.65em 1.8em;border-radius:99px;
+  cursor:not-allowed;
+  transition:all 0.25s;
+}
+#btn-scan.active{
+  background:rgba(79,232,128,0.15);border-color:rgba(79,232,128,0.6);
+  color:var(--green-ar);cursor:pointer;
+}
+#btn-scan.active:active{transform:translateX(-50%) scale(0.97);}
+
+#drag-hint{
+  position:absolute;top:18px;left:50%;transform:translateX(-50%);
+  background:rgba(13,10,7,0.6);border:1px solid rgba(217,199,154,0.25);
+  color:var(--gold);font-size:0.65rem;letter-spacing:0.04em;
+  padding:5px 14px;border-radius:99px;opacity:0;pointer-events:none;
+  transition:opacity 0.4s;white-space:nowrap;
+}
+#drag-hint.visible{opacity:0.85;}
+
+/* top-left sala nav */
+#sala-back{
+  position:absolute;top:16px;left:16px;
+  background:rgba(13,10,7,0.5);border:1px solid rgba(217,199,154,0.25);
+  color:var(--cream-dim);font-family:'Saira',sans-serif;font-size:0.7rem;
+  letter-spacing:0.05em;padding:6px 14px;border-radius:99px;
+  cursor:pointer;transition:color 0.2s;z-index:50;
+}
+#sala-back:hover{color:var(--cream);}
+
+/* ===== VITRINA 3D ===== */
+#screen-vitrina{
+  position:fixed;inset:0;z-index:11500;
+  display:none;background:transparent;
+}
+#screen-vitrina.activa{display:block;}
+#vitrina-canvas-wrap{position:absolute;inset:0;}
+#vitrina-canvas-wrap canvas{display:block;touch-action:none;}
+
+/* Panel info lateral */
+#vitrina-panel{
+  position:absolute;right:0;top:0;bottom:0;
+  width:min(360px,100%);
+  background:rgba(13,10,7,0.88);
+  backdrop-filter:blur(16px);
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  transform:translateX(100%);
+  transition:transform 0.45s cubic-bezier(0.25,0.46,0.45,0.94);
+}
+#vitrina-panel.abierto{transform:translateX(0);}
+
+.vp-header{
+  padding:20px 22px 14px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.vp-badge{
+  font-size:0.6rem;font-weight:700;letter-spacing:0.14em;
+  color:var(--green-ar);margin-bottom:10px;text-transform:uppercase;
+}
+.vp-badge span{
+  display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--green-ar);margin-right:6px;vertical-align:middle;
+  animation:pulse 1s ease-in-out infinite;
+}
+.vp-title{
+  font-family:'Playfair Display',serif;
+  font-size:1.3rem;color:var(--cream);line-height:1.2;
+}
+.vp-meta{font-size:0.72rem;color:var(--gold);margin-top:5px;letter-spacing:0.04em;}
+
+.vp-dialog{
+  flex:1;overflow-y:auto;padding:16px 22px;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+.char-header{
+  display:flex;align-items:center;gap:10px;margin-bottom:12px;
+}
+.char-emoji{font-size:1.4rem;}
+.char-name{font-size:0.72rem;color:var(--gold);font-weight:500;}
+.dialog-bubble{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:3px;padding:14px 16px;
+  font-size:0.82rem;color:var(--cream);line-height:1.65;
+  min-height:80px;
+  transition:all 0.3s;
+}
+.dialog-bubble.typing::after{
+  content:'▋';animation:blink 0.8s step-end infinite;color:var(--gold);
+}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0;}}
+
+.vp-qa{
+  padding:14px 22px 22px;flex-shrink:0;
+  border-top:1px solid var(--border);
+}
+.vp-qa-title{
+  font-size:0.7rem;letter-spacing:0.08em;color:var(--cream-dim);
+  text-transform:uppercase;margin-bottom:10px;
+}
+.qa-btn{
+  display:block;width:100%;margin-bottom:6px;
+  background:var(--bg-card);border:1px solid var(--border);
+  color:var(--cream);font-family:'Saira',sans-serif;font-size:0.75rem;
+  text-align:left;padding:9px 12px;border-radius:2px;
+  cursor:pointer;transition:background 0.2s,border-color 0.2s,color 0.2s;
+  line-height:1.4;
+}
+.qa-btn:hover{background:var(--bg-card-hover);border-color:var(--gold-dim);color:var(--cream);}
+.qa-btn.selected{background:rgba(201,162,82,0.12);border-color:var(--gold);color:var(--gold);}
+
+/* info strip bajo objeto */
+.vp-info-strip{
+  display:flex;gap:0;flex-shrink:0;
+  border-top:1px solid var(--border);
+}
+.vis-item{
+  flex:1;padding:12px 10px;text-align:center;
+  border-right:1px solid var(--border);
+}
+.vis-item:last-child{border-right:none;}
+.vis-icon{font-size:1rem;color:var(--cream-dim);display:block;margin-bottom:3px;}
+.vis-label{font-size:0.6rem;color:var(--cream-dim);letter-spacing:0.04em;}
+.vis-value{font-size:0.7rem;color:var(--cream);}
+
+/* Botones flotantes vitrina */
+.float-btn{
+  position:fixed;
+  background:rgba(13,10,7,0.55);
+  border:1px solid rgba(217,199,154,0.3);
+  width:40px;height:40px;border-radius:50%;
+  display:none;align-items:center;justify-content:center;
+  cursor:pointer;z-index:12000;
+  transition:transform 0.2s,background 0.2s;
+}
+.float-btn.activo{display:flex;}
+.float-btn:hover{transform:scale(1.08);background:rgba(13,10,7,0.8);}
+.float-btn svg{width:18px;height:18px;stroke:var(--cream);fill:none;}
+#btn-vitrina-back{top:16px;left:16px;}
+#btn-vitrina-reset{top:16px;right:16px;}
+#btn-vitrina-info{
+  bottom:24px;right:16px;
+  background:rgba(201,162,82,0.2);
+  border-color:rgba(201,162,82,0.5);
+}
+#btn-vitrina-info.abierto{background:rgba(201,162,82,0.35);}
+#btn-vitrina-info svg{stroke:var(--gold);}
+#obj-label{
+  position:fixed;bottom:24px;left:0;right:0;text-align:center;
+  color:var(--cream);font-size:0.72rem;letter-spacing:0.06em;
+  opacity:0;transition:opacity 0.6s;z-index:11600;
+  pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,0.7);
+}
+#obj-label.visible{opacity:0.75;}
+
+/* ===== TOAST ===== */
+#toast{
+  position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-60px);
+  background:rgba(201,162,82,0.15);border:1px solid rgba(201,162,82,0.5);
+  color:var(--gold);font-size:0.75rem;letter-spacing:0.04em;
+  padding:8px 20px;border-radius:99px;z-index:99999;
+  transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+  white-space:nowrap;pointer-events:none;
+}
+#toast.show{transform:translateX(-50%) translateY(0);}
+
+@media(max-width:480px){
+  #vitrina-panel{width:100%;border-left:none;border-top:1px solid var(--border);top:auto;height:55%;}
+  #vitrina-panel.abierto{transform:translateY(0);}
+  #vitrina-panel{transform:translateY(100%);}
 }
 </style>
 </head>
 <body>
 
-<div id="pantalla-carga">
-  <div id="titulo-principal">
-    <h1>Recorrido Virtual Museo</h1>
-    <p>Mové la cámara, apuntá a una obra y escaneala</p>
+<!-- ===== BIENVENIDA ===== -->
+<div id="screen-welcome">
+  <div class="welcome-line"></div>
+  <div id="welcome-logo">
+    <h1>ArtAlive</h1>
+    <div class="tagline">Museo Interactivo de Realidad Aumentada</div>
   </div>
-  <button id="boton-comenzar">Empezar recorrido</button>
+  <div class="welcome-line"></div>
+  <p id="welcome-desc">Descubrí las obras de nuestra colección. Apuntá la cámara, escaneá y dejá que los objetos cobren vida ante tus ojos.</p>
+  <div class="obra-preview-strip" id="obras-dots"></div>
+  <button id="btn-enter">Entrar a la galería ▶</button>
+  <div class="welcome-footer">© ArtAlive Museum Experience · v2.0</div>
 </div>
 
-<div id="vista-sala">
-  <div id="contenedor-sala"></div>
-
-  <div id="indicador-arrastre">arrastrá para mirar alrededor</div>
-
-  <div id="marco-escaneo">
-    <div class="esquina tl"></div>
-    <div class="esquina tr"></div>
-    <div class="esquina bl"></div>
-    <div class="esquina br"></div>
-    <div id="linea-escaneo"></div>
+<!-- ===== GALERÍA ===== -->
+<div id="screen-gallery">
+  <div class="gallery-header">
+    <div class="gh-logo">ArtAlive</div>
+    <div>
+      <button id="btn-gallery-back" style="background:none;border:none;color:var(--cream-dim);font-family:'Saira',sans-serif;font-size:0.75rem;cursor:pointer;margin-right:14px;">← Inicio</button>
+      <span class="gh-ar-badge">◉ AR DISPONIBLE</span>
+    </div>
   </div>
-
-  <div id="estado-escaneo"><span class="punto-pulso"></span>Buscando obra…</div>
-  <button id="boton-tap-escanear" disabled>Apuntá a una obra</button>
+  <div class="gallery-title-area">
+    <h2>Colección Permanente</h2>
+    <p>Seleccioná una obra para explorar la sala y activar la experiencia AR</p>
+  </div>
+  <div class="gallery-divider"></div>
+  <div class="gallery-cards" id="gallery-cards"></div>
 </div>
 
-<div id="escena-3d"></div>
+<!-- ===== SALA 3D ===== -->
+<div id="screen-sala">
+  <div id="sala-canvas-wrap"></div>
+  <button id="sala-back">← Galería</button>
+  <div id="drag-hint">arrastrá para mirar alrededor</div>
 
-<button id="boton-cerrar" class="boton-ui" title="Volver a la sala">
-  <svg viewBox="0 0 24 24" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
-</button>
+  <div class="scan-frame" id="scan-frame">
+    <div class="sf-corner tl"></div>
+    <div class="sf-corner tr"></div>
+    <div class="sf-corner bl"></div>
+    <div class="sf-corner br"></div>
+    <div id="scan-line"></div>
+  </div>
 
-<button id="boton-reset-vista" class="boton-ui" title="Centrar vista">
-  <svg viewBox="0 0 24 24" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
-</button>
+  <div id="scan-status"><span class="pulse-dot"></span>Buscando obra…</div>
+  <button id="btn-scan" disabled>Apuntá a una obra</button>
+</div>
 
-<div id="etiqueta-obra"></div>
+<!-- ===== VITRINA 3D ===== -->
+<div id="screen-vitrina">
+  <div id="vitrina-canvas-wrap"></div>
+
+  <button id="btn-vitrina-back" class="float-btn" title="Volver a la sala">
+    <svg viewBox="0 0 24 24" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  </button>
+  <button id="btn-vitrina-reset" class="float-btn" title="Resetear vista">
+    <svg viewBox="0 0 24 24" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
+  </button>
+  <button id="btn-vitrina-info" class="float-btn" title="Info de la obra">
+    <svg viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+  </button>
+  <div id="obj-label"></div>
+
+  <div id="vitrina-panel">
+    <div class="vp-header">
+      <div class="vp-badge"><span></span>AR activo — objeto detectado</div>
+      <div class="vp-title" id="vp-title">—</div>
+      <div class="vp-meta" id="vp-meta">—</div>
+    </div>
+    <div class="vp-info-strip" id="vp-info-strip"></div>
+    <div class="vp-dialog">
+      <div class="char-header">
+        <span class="char-emoji" id="vp-emoji">🏺</span>
+        <span class="char-name" id="vp-char-name">El objeto dice…</span>
+      </div>
+      <div class="dialog-bubble" id="vp-dialog-text">—</div>
+    </div>
+    <div class="vp-qa">
+      <div class="vp-qa-title">Preguntá al objeto</div>
+      <div id="vp-qa-buttons"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
 
 <script>
-// ============================================================
-// Recorrido Virtual Museo — maqueta
-// Flujo: carga -> sala 360 navegable -> al apuntar a una obra
-// se habilita "Escanear" -> escena 3D del objeto detectado.
-//
-// El punto de integración real con MindAR (cuando haya .mind
-// entrenados) está marcado abajo en CALCULAR_OBJETO_EN_MIRA.
-// Ahí es donde, en vez de raycasting contra objetos 3D propios,
-// se conectaría el evento targetFound/targetLost de MindAR.
-// ============================================================
+const CATALOG = [
+  {
+    id:'vasija',
+    nombre:'Vasija Ceremonial',
+    artista:'Cultura Diaguita',
+    anio:'ca. 1200 d.C.',
+    origen:'NOA, Argentina',
+    estilo:'Cerámica precolombina',
+    acento:'#c9853a',
+    emoji:'🏺',
+    intro:'Soy más que barro cocido. En mis curvas guardé el maíz sagrado, recibí los primeros granos de lluvia, sostuve el festín de la cosecha. Cada trazo en mi piel es un canto a la tierra. Tocame con los ojos.',
+    qa:[
+      {q:'¿Para qué me usaban?',a:'Fui utilizada en rituales de ofrenda y almacenamiento de alimentos sagrados como maíz y quinoa. Las vasijas como yo eran enterradas junto a los difuntos como provisión para el viaje al mundo de abajo.'},
+      {q:'¿Cómo me hicieron?',a:'Mis creadores usaban la técnica del rolido: tiras de arcilla apiladas en espiral, lisadas a mano, secadas al sol y cocidas en hornos de barro a más de 700°C. El color rojizo viene del óxido de hierro natural de la arcilla del NOA.'},
+      {q:'¿Qué significan mis asas?',a:'Las asas horizontales no son solo para sostenerme: representan los brazos abiertos, símbolo de hospitalidad y reciprocidad. En la cosmovisión andina, dar y recibir son actos sagrados que equilibran el mundo.'},
+    ],
+    infoStrip:[{icon:'🏛',label:'Estilo',val:'Diaguita'},{icon:'🌍',label:'Origen',val:'Tucumán'},{icon:'📅',label:'Período',val:'s. XII'}],
+    geo:'vasija',
+    cardColor:'#1a1208',
+  },
+  {
+    id:'cantaro',
+    nombre:'Cántaro de Cerámica',
+    artista:'Alfarez desconocido',
+    anio:'ca. 1400 d.C.',
+    origen:'Valle Calchaquí',
+    estilo:'Cerámica santamariana',
+    acento:'#8a7256',
+    emoji:'⚱️',
+    intro:'Cargué agua desde el río hasta la aldea en la alta montaña. Mis líneas grabadas son un mapa del cielo: serpientes, estrellas y el ojo del jaguar. No soy un recipiente vacío — soy una historia llena.',
+    qa:[
+      {q:'¿Qué son esas líneas grabadas?',a:'Los grabados son gliphs de la tradición santamariana: serpientes bicéfalas que representan el ciclo del agua, rombos que simbolizan el campo sembrado, y espirales que indican el movimiento del sol a través del año agrícola.'},
+      {q:'¿Cuánto líquido podés guardar?',a:'Mi capacidad ronda los 4-5 litros. En la montaña, donde el agua escaseaba, eso era suficiente para abastecer a una familia durante un día de trabajo en los andenes. Fui diseñado para ser liviano al transportar pero estable al apoyar.'},
+      {q:'¿Por qué el cuello tan angosto?',a:'El cuello estrecho no es capricho estético: reduce la evaporación en climas secos de altura, facilita verter con precisión en recipientes pequeños, y actúa como filtro natural que retiene impurezas cuando se toma directamente.'},
+    ],
+    infoStrip:[{icon:'🏛',label:'Estilo',val:'Santamariano'},{icon:'🌍',label:'Origen',val:'Salta'},{icon:'📅',label:'Período',val:'s. XV'}],
+    geo:'cantaro',
+    cardColor:'#141008',
+  },
+  {
+    id:'mascara',
+    nombre:'Máscara Funeraria',
+    artista:'Cultura Muisca',
+    anio:'ca. 800 d.C.',
+    origen:'Colombia central',
+    estilo:'Orfebrería tumbaga',
+    acento:'#b59a3a',
+    emoji:'🎭',
+    intro:'Cubrí el rostro de un guerrero-sacerdote en su viaje al otro mundo. Hecha de tumbaga, aleación de oro y cobre, fusioné dos metales como el difunto fusionó dos mundos. Mi mirada nunca parpadea — porque yo no duermo.',
+    qa:[
+      {q:'¿De qué estás hecha?',a:'Soy de tumbaga: una aleación de oro, cobre y a veces plata. Los orfebres muisca la preferían al oro puro porque es más dura, fácil de martillar en frío, y tiene un color dorado-rojizo que evoca al sol y la sangre a la vez — símbolo de vida y muerte.'},
+      {q:'¿Qué pasaba en la ceremonia?',a:'El chamán me colocaba sobre el difunto en la cámara funeraria. Se creía que yo "completaba" el rostro para el viaje: la expresión rígida y serena comunica a los guardianes del inframundo que quien porta esta máscara llega con poder y dignidad, no como alma errante.'},
+      {q:'¿Cómo se trabajaba el metal?',a:'Con martillos de piedra y cinceles de cobre sobre piedras de yunque, sin torno ni moldes: todo a mano. Primero forjaban la lámina, luego la recortaban con cinceles, repujaban los rasgos desde adentro, y pulían con piedra pómez. Un trabajo de semanas por una pieza.'},
+    ],
+    infoStrip:[{icon:'🏛',label:'Material',val:'Tumbaga'},{icon:'🌍',label:'Origen',val:'Colombia'},{icon:'📅',label:'Período',val:'s. VIII'}],
+    geo:'mascara',
+    cardColor:'#141008',
+  },
+  {
+    id:'estatuilla',
+    nombre:'Estatuilla de Fertilidad',
+    artista:'Cultura Valdivia',
+    anio:'ca. 3200 a.C.',
+    origen:'Costa de Ecuador',
+    estilo:'Cerámica Valdivia',
+    acento:'#a05a2a',
+    emoji:'🗿',
+    intro:'Soy de las más antiguas del continente. Dos mil años antes de Cristo, manos femeninas me modelaron para invocar la abundancia. Mi cuerpo exagerado no es torpeza — es sabiduría: amplifica lo que importa, lo que da vida.',
+    qa:[
+      {q:'¿Por qué esa forma tan exagerada?',a:'Las proporciones amplias de mi cuerpo no son error artístico: son énfasis intencional en la fertilidad, el embarazo y la abundancia. Las culturas precolombinas no buscaban "realismo" fotográfico sino comunicar esencias. Lo que importa se agranda.'},
+      {q:'¿Quién me creó?',a:'La cerámica Valdivia (3500-1800 a.C.) es la tradición alfarera más antigua conocida de Sudamérica. Se cree que estas figuras eran creadas por mujeres, para mujeres, en contextos domésticos: protección durante el embarazo, rituales de cosecha, y cuidado de los difuntos.'},
+      {q:'¿Cómo sobreviví tanto tiempo?',a:'Fui enterrada en un contexto ritual seco, lejos de la humedad costera. La cocción a alta temperatura vitrifica parcialmente la arcilla, haciéndola resistente. Además, los suelos arcillosos de Ecuador neutralizan la acidez que destruye los materiales orgánicos.'},
+    ],
+    infoStrip:[{icon:'🏛',label:'Cultura',val:'Valdivia'},{icon:'🌍',label:'Origen',val:'Ecuador'},{icon:'📅',label:'Período',val:'3200 a.C.'}],
+    geo:'estatuilla',
+    cardColor:'#140e08',
+  },
+];
 
-const pantallaCarga    = document.getElementById('pantalla-carga');
-const botonComenzar    = document.getElementById('boton-comenzar');
-const vistaSala        = document.getElementById('vista-sala');
-const contenedorSala   = document.getElementById('contenedor-sala');
-const marcoEscaneo     = document.getElementById('marco-escaneo');
-const estadoEscaneo    = document.getElementById('estado-escaneo');
-const botonTapEscanear = document.getElementById('boton-tap-escanear');
-const indicadorArrastre= document.getElementById('indicador-arrastre');
-const escena3dDiv      = document.getElementById('escena-3d');
-const botonCerrar      = document.getElementById('boton-cerrar');
-const botonResetVista  = document.getElementById('boton-reset-vista');
-const etiquetaObra     = document.getElementById('etiqueta-obra');
-
-document.body.classList.add('visible');
-
-// ---------- Paso 1: pantalla de carga ----------
-botonComenzar.addEventListener('click', () => {
-  pantallaCarga.classList.add('fade-out');
-  setTimeout(() => {
-    pantallaCarga.style.display = 'none';
-    mostrarSala();
-  }, 700);
-});
-
-function mostrarSala() {
-  vistaSala.classList.add('activa');
-  if (!salaIniciada) {
-    iniciarSala3D();
-    salaIniciada = true;
-  }
-  indicadorArrastre.classList.add('visible');
-  setTimeout(() => indicadorArrastre.classList.remove('visible'), 3200);
-}
-
-// ============================================================
-// SALA 360 — Three.js
-// Cámara fija en el centro, rotando el target (lookAt) según
-// el arrastre del usuario. Dos objetos colgados en ángulos
-// distintos sobre las paredes del cilindro. Cada frame se
-// calcula cuál objeto (si alguno) cae dentro del cono central
-// de la mira -> eso habilita el botón de escaneo.
-// ============================================================
+let estadoActual = 'welcome';
+let obraActual = null;
 
 let salaIniciada = false;
 let rendererSala, sceneSala, cameraSala;
-let arrastrandoSala = false;
-let ultimoXSala = 0, ultimoYSala = 0;
-let yawSala = 0;     // rotación horizontal acumulada
-let pitchSala = 0;   // rotación vertical acumulada (limitada)
+let arrastraSala = false;
+let uxSala=0, uySala=0;
+let yawSala=0, pitchSala=0;
+let obraEnMira=null;
+const mallasObras={};
 
-const OBRAS = [
-  { id: 'vasija',  nombre: 'Vasija ceremonial',  angulo: 0,                 alto: 0 },
-  { id: 'cantaro', nombre: 'Cántaro de cerámica', angulo: Math.PI * 0.62,    alto: -0.1 },
-];
+let vitrIniciada = false;
+let rendererVit, sceneVit, cameraVit, objetoVit;
+let arrastraVit=false, uxVit=0, uyVit=0;
+let angH=0, angV=0.18, autoRot=true;
+const RAD_CAM = 5.2;
 
-let mallasObras = {}; // id -> THREE.Group
-let obraEnMira = null; // id de la obra actualmente enganchada, o null
+// ============================================================
+// PANTALLA BIENVENIDA
+// ============================================================
+(function buildWelcome(){
+  const strip = document.getElementById('obras-dots');
+  CATALOG.forEach(o=>{
+    strip.innerHTML += `<div class="obra-dot"><span class="obra-dot-icon">${o.emoji}</span><span class="obra-dot-name">${o.artista}</span></div>`;
+  });
+})();
 
-function iniciarSala3D() {
-  sceneSala = new THREE.Scene();
+document.getElementById('btn-enter').addEventListener('click',()=>{
+  const w = document.getElementById('screen-welcome');
+  w.classList.add('fade-out');
+  setTimeout(()=>{w.style.display='none';irA('gallery');},800);
+});
 
-  cameraSala = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 100);
-  cameraSala.position.set(0, 0, 0);
+// ============================================================
+// GALERÍA
+// ============================================================
+(function buildGallery(){
+  const container = document.getElementById('gallery-cards');
+  CATALOG.forEach(obra=>{
+    const card = document.createElement('div');
+    card.className='obra-card';
+    card.innerHTML=`
+      <div class="obra-card-img" style="background:${obra.cardColor}">
+        <canvas class="obra-card-canvas" data-id="${obra.id}"></canvas>
+        <div class="obra-card-ar-chip">AR</div>
+      </div>
+      <div class="obra-card-body">
+        <div class="obra-card-meta">${obra.anio} &nbsp;·&nbsp; ${obra.origen}</div>
+        <div class="obra-card-title">${obra.nombre}</div>
+        <div class="obra-card-artist">— ${obra.artista}</div>
+        <div class="obra-card-desc">${obra.intro.substring(0,90)}…</div>
+        <div class="obra-card-cta">Explorar en sala →</div>
+      </div>`;
+    card.addEventListener('click',()=>abrirSala(obra));
+    container.appendChild(card);
+  });
+  setTimeout(renderCardPreviews,200);
+})();
 
-  rendererSala = new THREE.WebGLRenderer({ antialias: true });
-  rendererSala.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  rendererSala.setSize(window.innerWidth, window.innerHeight);
-  rendererSala.outputColorSpace = THREE.SRGBColorSpace;
-  contenedorSala.appendChild(rendererSala.domElement);
-
-  construirSalaGeometria();
-  construirObras();
-  construirIluminacionSala();
-
-  actualizarMiradaCamara();
-
-  const dom = rendererSala.domElement;
-  dom.addEventListener('pointerdown', alPresionarSala);
-  dom.addEventListener('pointermove', alMoverSala);
-  dom.addEventListener('pointerup', alSoltarSala);
-  dom.addEventListener('pointercancel', alSoltarSala);
-  dom.addEventListener('pointerleave', alSoltarSala);
-  window.addEventListener('resize', alRedimensionarSala);
-
-  bucleAnimacionSala();
+function renderCardPreviews(){
+  document.querySelectorAll('.obra-card-canvas').forEach(canvas=>{
+    const id = canvas.dataset.id;
+    const obra = CATALOG.find(o=>o.id===id);
+    if(!obra) return;
+    const w=canvas.parentElement.offsetWidth, h=canvas.parentElement.offsetHeight;
+    canvas.width=w; canvas.height=h;
+    const renderer = new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.setSize(w,h);
+    renderer.setClearColor(0x000000,0);
+    const scene=new THREE.Scene();
+    const cam=new THREE.PerspectiveCamera(45,w/h,0.1,50);
+    cam.position.set(0,0.4,4.5);cam.lookAt(0,0,0);
+    scene.add(new THREE.AmbientLight(0xfff3e0,0.7));
+    const dl=new THREE.DirectionalLight(0xffe9c7,1.1);dl.position.set(3,4,3);scene.add(dl);
+    const obj = crearGeometria(id);
+    scene.add(obj);
+    let ang=0;
+    (function loop(){
+      requestAnimationFrame(loop);
+      ang+=0.012; obj.rotation.y=ang;
+      renderer.render(scene,cam);
+    })();
+  });
 }
 
-function construirSalaGeometria() {
-  const radioSala = 7;
-  const alturaSala = 5.2;
+document.getElementById('btn-gallery-back').addEventListener('click',()=>irA('welcome'));
 
-  // -- textura de pared (canvas 2D: hueso + zócalo) --
-  const texturaPared = generarTexturaCanvas(512, 512, (ctx, w, h) => {
-    ctx.fillStyle = '#e8e2d4';
-    ctx.fillRect(0, 0, w, h);
-    // zócalo inferior
-    ctx.fillStyle = '#c7bfa9';
-    ctx.fillRect(0, h * 0.82, w, h * 0.18);
-    ctx.fillStyle = '#a89c7e';
-    ctx.fillRect(0, h * 0.80, w, h * 0.02);
-    // leves franjas verticales (paneles) para dar escala
-    ctx.strokeStyle = 'rgba(150,140,115,0.25)';
-    ctx.lineWidth = 2;
-    for (let x = 0; x < w; x += w / 8) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h * 0.82);
-      ctx.stroke();
-    }
-    // moldura superior
-    ctx.fillStyle = '#d6cdb8';
-    ctx.fillRect(0, 0, w, h * 0.04);
-  });
-  texturaPared.wrapS = THREE.RepeatWrapping;
-  texturaPared.repeat.set(6, 1);
+function abrirSala(obra){
+  obraActual=obra;
+  // FIX: iniciar sala ANTES de irA para que el canvas ya exista cuando la pantalla es visible
+  if(!salaIniciada){iniciarSala3D();salaIniciada=true;}
+  irA('sala');
+  const hint=document.getElementById('drag-hint');
+  hint.classList.add('visible');
+  setTimeout(()=>hint.classList.remove('visible'),3000);
+}
 
-  const geometriaPared = new THREE.CylinderGeometry(radioSala, radioSala, alturaSala, 48, 1, true);
-  const materialPared = new THREE.MeshStandardMaterial({
-    map: texturaPared,
-    side: THREE.BackSide,
-    roughness: 0.92,
-    metalness: 0.0,
+// ============================================================
+// SALA 3D
+// ============================================================
+const POSICIONES_SALA = [
+  {angulo:0,       alto:0.1},
+  {angulo:Math.PI*0.65, alto:-0.05},
+  {angulo:Math.PI*1.25, alto:0.08},
+  {angulo:Math.PI*1.7,  alto:-0.05},
+];
+const UMBRAL_ANGULAR = 0.20;
+
+function iniciarSala3D(){
+  sceneSala=new THREE.Scene();
+  cameraSala=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,0.1,100);
+  cameraSala.position.set(0,0,0);
+
+  rendererSala=new THREE.WebGLRenderer({antialias:true});
+  rendererSala.setPixelRatio(Math.min(devicePixelRatio,2));
+  rendererSala.setSize(innerWidth,innerHeight);
+  rendererSala.outputColorSpace=THREE.SRGBColorSpace;
+  // FIX: color de fondo explícito para que se vea la sala
+  rendererSala.setClearColor(0x111008,1);
+  document.getElementById('sala-canvas-wrap').appendChild(rendererSala.domElement);
+
+  construirSala();
+  colocarObrasEnSala();
+  iluminarSala();
+  actualizarMiradaSala();
+
+  const dom=rendererSala.domElement;
+  dom.addEventListener('pointerdown',e=>{
+    arrastraSala=true;
+    uxSala=e.clientX;
+    uySala=e.clientY;
+    dom.setPointerCapture(e.pointerId);
   });
-  const pared = new THREE.Mesh(geometriaPared, materialPared);
-  pared.position.y = 0;
+  // FIX: { passive: false } para poder llamar preventDefault y que el drag funcione
+  dom.addEventListener('pointermove',e=>{
+    if(!arrastraSala)return;
+    e.preventDefault();
+    yawSala-=(e.clientX-uxSala)*0.0045;
+    pitchSala=Math.max(-0.5,Math.min(0.5,pitchSala-(e.clientY-uySala)*0.0035));
+    uxSala=e.clientX;uySala=e.clientY;
+    actualizarMiradaSala();
+  },{passive:false});
+  ['pointerup','pointercancel'].forEach(ev=>dom.addEventListener(ev,()=>arrastraSala=false));
+
+  window.addEventListener('resize',()=>{
+    cameraSala.aspect=innerWidth/innerHeight;cameraSala.updateProjectionMatrix();
+    rendererSala.setSize(innerWidth,innerHeight);
+  });
+  buclearSala();
+}
+
+function construirSala(){
+  const R=7, H=5.2;
+  const twPared=genTextura(512,512,(ctx,w,h)=>{
+    ctx.fillStyle='#ece6d8';ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#c9c0ac';ctx.fillRect(0,h*0.82,w,h*0.18);
+    ctx.fillStyle='#a89878';ctx.fillRect(0,h*0.795,w,h*0.025);
+    ctx.strokeStyle='rgba(140,130,105,0.2)';ctx.lineWidth=1.5;
+    for(let x=0;x<w;x+=w/8){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h*0.8);ctx.stroke();}
+    ctx.fillStyle='#d8d0c0';ctx.fillRect(0,0,w,h*0.035);
+    ctx.fillStyle='rgba(120,90,60,0.08)';ctx.fillRect(w*0.2,h*0.15,w*0.6,h*0.4);
+    ctx.strokeStyle='rgba(120,90,60,0.3)';ctx.lineWidth=3;
+    ctx.strokeRect(w*0.2,h*0.15,w*0.6,h*0.4);
+  });
+  twPared.wrapS=THREE.RepeatWrapping;twPared.repeat.set(7,1);
+  const pared=new THREE.Mesh(
+    new THREE.CylinderGeometry(R,R,H,60,1,true),
+    new THREE.MeshStandardMaterial({map:twPared,side:THREE.BackSide,roughness:0.94})
+  );
   sceneSala.add(pared);
 
-  // -- textura de piso (canvas 2D: tablones de madera) --
-  const texturaPiso = generarTexturaCanvas(512, 512, (ctx, w, h) => {
-    ctx.fillStyle = '#8a5a36';
-    ctx.fillRect(0, 0, w, h);
-    const tablones = 10;
-    for (let i = 0; i < tablones; i++) {
-      const y = (h / tablones) * i;
-      const tono = 0.85 + Math.sin(i * 1.7) * 0.06;
-      ctx.fillStyle = `rgba(${Math.floor(120 * tono)}, ${Math.floor(78 * tono)}, ${Math.floor(46 * tono)}, 1)`;
-      ctx.fillRect(0, y, w, h / tablones);
-      ctx.strokeStyle = 'rgba(40,24,12,0.5)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+  const twPiso=genTextura(512,512,(ctx,w,h)=>{
+    ctx.fillStyle='#7a5030';ctx.fillRect(0,0,w,h);
+    const n=12;
+    for(let i=0;i<n;i++){
+      const y=(h/n)*i,tone=0.88+Math.sin(i*1.9)*0.07;
+      ctx.fillStyle=`rgb(${Math.floor(115*tone)},${Math.floor(72*tone)},${Math.floor(38*tone)})`;
+      ctx.fillRect(0,y,w,h/n);
+      ctx.strokeStyle='rgba(30,15,5,0.45)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
     }
   });
-  texturaPiso.wrapS = THREE.RepeatWrapping;
-  texturaPiso.wrapT = THREE.RepeatWrapping;
-  texturaPiso.repeat.set(5, 5);
-
-  const piso = new THREE.Mesh(
-    new THREE.CircleGeometry(radioSala, 48),
-    new THREE.MeshStandardMaterial({ map: texturaPiso, roughness: 0.75, metalness: 0.02 })
+  twPiso.wrapS=THREE.RepeatWrapping;twPiso.wrapT=THREE.RepeatWrapping;twPiso.repeat.set(5,5);
+  const piso=new THREE.Mesh(
+    new THREE.CircleGeometry(R,60),
+    new THREE.MeshStandardMaterial({map:twPiso,roughness:0.78})
   );
-  piso.rotation.x = -Math.PI / 2;
-  piso.position.y = -alturaSala / 2;
+  piso.rotation.x=-Math.PI/2;piso.position.y=-H/2;
   sceneSala.add(piso);
 
-  // -- techo simple --
-  const techo = new THREE.Mesh(
-    new THREE.CircleGeometry(radioSala, 48),
-    new THREE.MeshStandardMaterial({ color: 0xf3efe4, roughness: 0.95 })
+  const techo=new THREE.Mesh(
+    new THREE.CircleGeometry(R,60),
+    new THREE.MeshStandardMaterial({color:0xf5f1e8,roughness:0.96})
   );
-  techo.rotation.x = Math.PI / 2;
-  techo.position.y = alturaSala / 2;
+  techo.rotation.x=Math.PI/2;techo.position.y=H/2;
   sceneSala.add(techo);
+
+  const cornisa=new THREE.Mesh(
+    new THREE.TorusGeometry(R*0.98,0.08,8,60),
+    new THREE.MeshStandardMaterial({color:0xd4c8b0,roughness:0.9})
+  );
+  cornisa.rotation.x=Math.PI/2;cornisa.position.y=H/2-0.15;
+  sceneSala.add(cornisa);
+
+  const rodapie=new THREE.Mesh(
+    new THREE.CylinderGeometry(R*0.99,R*0.99,0.18,60,1,true),
+    new THREE.MeshStandardMaterial({color:0xb8ad98,roughness:0.88,side:THREE.BackSide})
+  );
+  rodapie.position.y=-H/2+0.09;
+  sceneSala.add(rodapie);
 }
 
-function generarTexturaCanvas(w, h, fnDibujo) {
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  fnDibujo(ctx, w, h);
-  const textura = new THREE.CanvasTexture(canvas);
-  textura.colorSpace = THREE.SRGBColorSpace;
-  return textura;
+function genTextura(w,h,fn){
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  fn(c.getContext('2d'),w,h);
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
 }
 
-function construirIluminacionSala() {
-  sceneSala.add(new THREE.AmbientLight(0xfff6e8, 0.7));
-
-  const luzCenital1 = new THREE.PointLight(0xfff0d8, 0.9, 14);
-  luzCenital1.position.set(2.5, 2.2, 1);
-  sceneSala.add(luzCenital1);
-
-  const luzCenital2 = new THREE.PointLight(0xfff0d8, 0.9, 14);
-  luzCenital2.position.set(-2.5, 2.2, -2);
-  sceneSala.add(luzCenital2);
-
-  const luzRelleno = new THREE.DirectionalLight(0xffffff, 0.25);
-  luzRelleno.position.set(0, 3, 0);
-  sceneSala.add(luzRelleno);
+function iluminarSala(){
+  sceneSala.add(new THREE.AmbientLight(0xfff4e5,0.65));
+  [[2.5,2.2,1],[-2.5,2.2,-2],[0.5,2,2.8]].forEach(([x,y,z])=>{
+    const l=new THREE.PointLight(0xfff0d8,0.75,15);l.position.set(x,y,z);sceneSala.add(l);
+  });
+  const lr=new THREE.DirectionalLight(0xffffff,0.2);lr.position.set(0,3,0);sceneSala.add(lr);
 }
 
-function construirObras() {
-  const radioColocacion = 4.6;
+function colocarObrasEnSala(){
+  const Rp=4.7;
+  CATALOG.forEach((obra,i)=>{
+    const pos=POSICIONES_SALA[i]||{angulo:0,alto:0};
+    const grupo=crearGeometria(obra.id);
+    const x=Rp*Math.sin(pos.angulo);
+    const z=-Rp*Math.cos(pos.angulo);
+    grupo.position.set(x,pos.alto,z);
+    grupo.lookAt(0,pos.alto,0);
 
-  OBRAS.forEach((obra) => {
-    const grupo = obra.id === 'vasija' ? crearVasija() : crearCantaro();
+    const pedMat=new THREE.MeshStandardMaterial({color:0x2a2520,roughness:0.88,metalness:0.04});
+    const ped=new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.6,0.9,28),pedMat);
+    ped.position.set(x,-1.82,z);
+    sceneSala.add(ped);
 
-    const x = radioColocacion * Math.sin(obra.angulo);
-    const z = -radioColocacion * Math.cos(obra.angulo);
-    grupo.position.set(x, obra.alto, z);
-    grupo.lookAt(0, obra.alto, 0);
-
-    // pedestal bajo cada obra
-    const pedestal = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.58, 0.85, 24),
-      new THREE.MeshStandardMaterial({ color: 0x2f2b24, roughness: 0.85, metalness: 0.04 })
-    );
-    pedestal.position.set(x, -1.78, z);
-    sceneSala.add(pedestal);
+    const spot=new THREE.SpotLight(0xffe5b0,1.5,8,Math.PI/7,0.4);
+    spot.position.set(x,2.5,z);spot.target.position.set(x,0,z);
+    sceneSala.add(spot);sceneSala.add(spot.target);
 
     sceneSala.add(grupo);
-    mallasObras[obra.id] = grupo;
+    mallasObras[obra.id]=grupo;
   });
 }
 
-function crearVasija() {
-  const puntos = [
-    new THREE.Vector2(0.0, -1.3), new THREE.Vector2(0.32, -1.28),
-    new THREE.Vector2(0.46, -1.05), new THREE.Vector2(0.5, -0.6),
-    new THREE.Vector2(0.42, -0.1), new THREE.Vector2(0.58, 0.35),
-    new THREE.Vector2(0.62, 0.7), new THREE.Vector2(0.5, 1.0),
-    new THREE.Vector2(0.34, 1.18), new THREE.Vector2(0.3, 1.3),
-    new THREE.Vector2(0.34, 1.36), new THREE.Vector2(0.0, 1.4),
-  ];
-  const geometria = new THREE.LatheGeometry(puntos, 64);
-  geometria.computeVertexNormals();
-  const material = new THREE.MeshStandardMaterial({ color: 0xb5602f, roughness: 0.62, metalness: 0.04 });
-  const cuerpo = new THREE.Mesh(geometria, material);
-
-  const grupo = new THREE.Group();
-  grupo.add(cuerpo);
-
-  const formaAsa = new THREE.TorusGeometry(0.33, 0.045, 10, 24, Math.PI * 1.15);
-  const asaIzq = new THREE.Mesh(formaAsa, material);
-  asaIzq.position.set(-0.56, 0.55, 0);
-  asaIzq.rotation.z = Math.PI / 2.3;
-  asaIzq.rotation.y = Math.PI;
-  grupo.add(asaIzq);
-
-  const asaDer = new THREE.Mesh(formaAsa, material);
-  asaDer.position.set(0.56, 0.55, 0);
-  asaDer.rotation.z = -Math.PI / 2.3;
-  grupo.add(asaDer);
-
-  grupo.scale.setScalar(0.62);
-  return grupo;
+function actualizarMiradaSala(){
+  const dx=Math.sin(yawSala)*Math.cos(pitchSala);
+  const dy=Math.sin(pitchSala);
+  const dz=-Math.cos(yawSala)*Math.cos(pitchSala);
+  cameraSala.lookAt(dx,dy,dz);
 }
 
-function crearCantaro() {
-  // perfil más bajo y panzón, sin asas, con cuello angosto
-  const puntos = [
-    new THREE.Vector2(0.0,  -1.1),
-    new THREE.Vector2(0.4,  -1.08),
-    new THREE.Vector2(0.62, -0.75),
-    new THREE.Vector2(0.68, -0.25),
-    new THREE.Vector2(0.6,   0.15),
-    new THREE.Vector2(0.4,   0.45),
-    new THREE.Vector2(0.22,  0.62),
-    new THREE.Vector2(0.24,  0.95),
-    new THREE.Vector2(0.3,   1.0),
-    new THREE.Vector2(0.0,   1.05),
-  ];
-  const geometria = new THREE.LatheGeometry(puntos, 56);
-  geometria.computeVertexNormals();
-  const material = new THREE.MeshStandardMaterial({ color: 0x8a7256, roughness: 0.78, metalness: 0.02 });
-  const cuerpo = new THREE.Mesh(geometria, material);
-
-  // un par de líneas grabadas simples (toroides finos) como decoración
-  const anillo = new THREE.Mesh(
-    new THREE.TorusGeometry(0.64, 0.018, 8, 40),
-    new THREE.MeshStandardMaterial({ color: 0x5c4a36, roughness: 0.7 })
-  );
-  anillo.position.y = -0.35;
-  anillo.rotation.x = Math.PI / 2;
-
-  const grupo = new THREE.Group();
-  grupo.add(cuerpo);
-  grupo.add(anillo);
-  grupo.scale.setScalar(0.62);
-  return grupo;
-}
-
-// ---------- control de arrastre (orbital, mirando desde el centro) ----------
-
-function alPresionarSala(e) {
-  arrastrandoSala = true;
-  ultimoXSala = e.clientX;
-  ultimoYSala = e.clientY;
-}
-
-function alMoverSala(e) {
-  if (!arrastrandoSala) return;
-  const dx = e.clientX - ultimoXSala;
-  const dy = e.clientY - ultimoYSala;
-  yawSala -= dx * 0.0045;
-  pitchSala = Math.max(-0.55, Math.min(0.55, pitchSala - dy * 0.0035));
-  ultimoXSala = e.clientX;
-  ultimoYSala = e.clientY;
-  actualizarMiradaCamara();
-}
-
-function alSoltarSala() {
-  arrastrandoSala = false;
-}
-
-function actualizarMiradaCamara() {
-  const dirX = Math.sin(yawSala) * Math.cos(pitchSala);
-  const dirY = Math.sin(pitchSala);
-  const dirZ = -Math.cos(yawSala) * Math.cos(pitchSala);
-  cameraSala.lookAt(dirX, dirY, dirZ);
-}
-
-function alRedimensionarSala() {
-  if (!cameraSala || !rendererSala) return;
-  cameraSala.aspect = window.innerWidth / window.innerHeight;
-  cameraSala.updateProjectionMatrix();
-  rendererSala.setSize(window.innerWidth, window.innerHeight);
-}
-
-// ---------- CALCULAR_OBJETO_EN_MIRA ----------
-// Punto de integración: hoy compara el centro de mira contra
-// posiciones 3D propias. El día que haya .mind reales, esto se
-// reemplaza por el callback targetFound de MindAR, que ya trae
-// el id del marcador detectado.
-const UMBRAL_ANGULAR = 0.19; // radianes de tolerancia del cono de mira
-
-function calcularObjetoEnMira() {
-  const dirMira = new THREE.Vector3(
-    Math.sin(yawSala) * Math.cos(pitchSala),
+function calcularEnMira(){
+  const dir=new THREE.Vector3(
+    Math.sin(yawSala)*Math.cos(pitchSala),
     Math.sin(pitchSala),
-    -Math.cos(yawSala) * Math.cos(pitchSala)
+    -Math.cos(yawSala)*Math.cos(pitchSala)
   ).normalize();
-
-  let mejorId = null;
-  let mejorAngulo = Infinity;
-
-  OBRAS.forEach((obra) => {
-    const malla = mallasObras[obra.id];
-    if (!malla) return;
-    const dirObjeto = malla.position.clone().normalize();
-    const angulo = dirMira.angleTo(dirObjeto);
-    if (angulo < UMBRAL_ANGULAR && angulo < mejorAngulo) {
-      mejorAngulo = angulo;
-      mejorId = obra.id;
-    }
+  let mejorId=null,mejorAng=Infinity;
+  CATALOG.forEach(o=>{
+    const m=mallasObras[o.id];if(!m)return;
+    const ang=dir.angleTo(m.position.clone().normalize());
+    if(ang<UMBRAL_ANGULAR&&ang<mejorAng){mejorAng=ang;mejorId=o.id;}
   });
-
   return mejorId;
 }
 
-function nombrePorId(id) {
-  const obra = OBRAS.find((o) => o.id === id);
-  return obra ? obra.nombre : '';
-}
-
-function actualizarUIDeMira() {
-  const idDetectado = calcularObjetoEnMira();
-
-  if (idDetectado !== obraEnMira) {
-    obraEnMira = idDetectado;
-
-    if (obraEnMira) {
-      marcoEscaneo.classList.add('enganchado');
-      estadoEscaneo.classList.add('enganchado');
-      estadoEscaneo.innerHTML = `<span class="punto-pulso"></span>${nombrePorId(obraEnMira)} detectada`;
-      botonTapEscanear.disabled = false;
-      botonTapEscanear.classList.add('habilitado');
-      botonTapEscanear.textContent = `Escanear ${nombrePorId(obraEnMira)}`;
-    } else {
-      marcoEscaneo.classList.remove('enganchado');
-      estadoEscaneo.classList.remove('enganchado');
-      estadoEscaneo.innerHTML = '<span class="punto-pulso"></span>Buscando obra…';
-      botonTapEscanear.disabled = true;
-      botonTapEscanear.classList.remove('habilitado');
-      botonTapEscanear.textContent = 'Apuntá a una obra';
-    }
+function actualizarUIEscaneo(){
+  const id=calcularEnMira();
+  if(id===obraEnMira)return;
+  obraEnMira=id;
+  const frame=document.getElementById('scan-frame');
+  const status=document.getElementById('scan-status');
+  const btn=document.getElementById('btn-scan');
+  if(id){
+    const obra=CATALOG.find(o=>o.id===id);
+    frame.classList.add('locked');
+    status.innerHTML=`<span class="pulse-dot" style="background:var(--scan-active)"></span>${obra.nombre} detectada`;
+    btn.disabled=false;btn.classList.add('active');
+    btn.textContent=`Escanear ${obra.nombre}`;
+  } else {
+    frame.classList.remove('locked');
+    status.innerHTML='<span class="pulse-dot"></span>Buscando obra…';
+    btn.disabled=true;btn.classList.remove('active');
+    btn.textContent='Apuntá a una obra';
   }
 }
 
-function bucleAnimacionSala() {
-  requestAnimationFrame(bucleAnimacionSala);
-  if (vistaSala.classList.contains('activa')) {
-    actualizarUIDeMira();
-    rendererSala.render(sceneSala, cameraSala);
-  }
+function buclearSala(){
+  requestAnimationFrame(buclearSala);
+  if(!document.getElementById('screen-sala').classList.contains('activa'))return;
+  actualizarUIEscaneo();
+  rendererSala.render(sceneSala,cameraSala);
 }
 
-// ---------- disparo del escaneo ----------
-botonTapEscanear.addEventListener('click', () => {
-  if (!obraEnMira) return;
-  dispararSecuenciaDeteccion(obraEnMira);
+document.getElementById('btn-scan').addEventListener('click',()=>{
+  if(!obraEnMira)return;
+  const obra=CATALOG.find(o=>o.id===obraEnMira);
+  const btn=document.getElementById('btn-scan');
+  btn.disabled=true;
+  const status=document.getElementById('scan-status');
+  status.innerHTML=`<span class="pulse-dot" style="background:var(--scan-active)"></span>Procesando ${obra.nombre}…`;
+  setTimeout(()=>abrirVitrina(obra),900);
 });
 
-function dispararSecuenciaDeteccion(idObra) {
-  botonTapEscanear.disabled = true;
-  estadoEscaneo.innerHTML = `<span class="punto-pulso" style="background:#7fd98a"></span>Procesando ${nombrePorId(idObra)}…`;
+document.getElementById('sala-back').addEventListener('click',()=>irA('gallery'));
 
-  setTimeout(() => {
-    vistaSala.classList.remove('activa');
-    mostrarEscena3D(idObra);
-  }, 900);
+// ============================================================
+// VITRINA 3D
+// ============================================================
+function iniciarVitrina(){
+  sceneVit=new THREE.Scene();
+  cameraVit=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,100);
+  rendererVit=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  rendererVit.setPixelRatio(Math.min(devicePixelRatio,2));
+  rendererVit.setSize(innerWidth,innerHeight);
+  rendererVit.outputColorSpace=THREE.SRGBColorSpace;
+  rendererVit.setClearColor(0x0d0a07,1);
+  document.getElementById('vitrina-canvas-wrap').appendChild(rendererVit.domElement);
+
+  sceneVit.add(new THREE.AmbientLight(0xfff3e0,0.5));
+  const lp=new THREE.DirectionalLight(0xffe9c7,1.2);lp.position.set(3,5,4);sceneVit.add(lp);
+  const lr=new THREE.DirectionalLight(0x9bb6cc,0.3);lr.position.set(-4,1,-3);sceneVit.add(lr);
+  const lc=new THREE.PointLight(0xffffff,0.45,15);lc.position.set(0,4,1);sceneVit.add(lc);
+
+  const ped=new THREE.Mesh(
+    new THREE.CylinderGeometry(1.08,1.25,0.45,36),
+    new THREE.MeshStandardMaterial({color:0x232018,roughness:0.88,metalness:0.06})
+  );
+  ped.position.y=-1.6;sceneVit.add(ped);
+
+  const gloAnillo=new THREE.Mesh(
+    new THREE.TorusGeometry(1.06,0.03,8,36),
+    new THREE.MeshStandardMaterial({color:0xc9a252,emissive:0xc9a252,emissiveIntensity:0.6})
+  );
+  gloAnillo.rotation.x=Math.PI/2;gloAnillo.position.y=-1.37;sceneVit.add(gloAnillo);
+
+  const dom=rendererVit.domElement;
+  dom.addEventListener('pointerdown',e=>{
+    arrastraVit=true;
+    autoRot=false;
+    uxVit=e.clientX;
+    uyVit=e.clientY;
+    dom.setPointerCapture(e.pointerId);
+  });
+  // FIX: { passive: false } para que el drag funcione correctamente
+  dom.addEventListener('pointermove',e=>{
+    if(!arrastraVit)return;
+    e.preventDefault();
+    angH-=(e.clientX-uxVit)*0.006;
+    angV=Math.max(-0.5,Math.min(0.85,angV+(e.clientY-uyVit)*0.005));
+    uxVit=e.clientX;uyVit=e.clientY;
+  },{passive:false});
+  ['pointerup','pointercancel'].forEach(ev=>dom.addEventListener(ev,()=>arrastraVit=false));
+
+  window.addEventListener('resize',()=>{
+    cameraVit.aspect=innerWidth/innerHeight;cameraVit.updateProjectionMatrix();
+    rendererVit.setSize(innerWidth,innerHeight);
+  });
+  buclearVitrina();
 }
 
-// ============================================================
-// ESCENA 3D — vitrina del objeto escaneado
-// ============================================================
-let threeIniciado = false;
-let renderer, scene, camera, objetoActivo;
-let arrastrando = false;
-let anguloUsuario = 0;
-let anguloVertical = 0.15;
-let ultimoX = 0, ultimoY = 0;
-let autoRotar = true;
-let radioCamara = 5.2;
+function posicionarCamaraVit(){
+  const x=RAD_CAM*Math.sin(angH)*Math.cos(angV);
+  const y=RAD_CAM*Math.sin(angV)+0.3;
+  const z=RAD_CAM*Math.cos(angH)*Math.cos(angV);
+  cameraVit.position.set(x,y,z);cameraVit.lookAt(0,0,0);
+}
 
-function mostrarEscena3D(idObra) {
-  escena3dDiv.classList.add('activa');
-  botonCerrar.classList.add('activo');
-  botonResetVista.classList.add('activo');
+function buclearVitrina(){
+  requestAnimationFrame(buclearVitrina);
+  if(!document.getElementById('screen-vitrina').classList.contains('activa'))return;
+  if(autoRot&&!arrastraVit)angH+=0.0025;
+  posicionarCamaraVit();
+  rendererVit.render(sceneVit,cameraVit);
+}
 
-  if (!threeIniciado) {
-    iniciarThreeVitrina();
-    threeIniciado = true;
-  }
+function animarAparicion(){
+  const t0=performance.now();const dur=700;
+  (function frame(now){
+    const t=Math.min(1,(now-t0)/dur);
+    const ease=1+2.7*Math.pow(t-1,3)+1.7*Math.pow(t-1,2);
+    const s=Math.max(0,ease);
+    if(objetoVit)objetoVit.scale.setScalar(Math.max(0.001,s)*1.6);
+    if(t<1)requestAnimationFrame(frame);
+  })(t0);
+}
 
-  cargarObjetoEnVitrina(idObra);
+function abrirVitrina(obra){
+  obraActual=obra;
+  if(!vitrIniciada){iniciarVitrina();vitrIniciada=true;}
+
+  if(objetoVit){sceneVit.remove(objetoVit);}
+  objetoVit=crearGeometria(obra.id);
+  objetoVit.scale.setScalar(0.001);
+  objetoVit.position.y=-0.1;
+  sceneVit.add(objetoVit);
+  angH=0;angV=0.18;autoRot=true;
   animarAparicion();
 
-  etiquetaObra.textContent = idObra === 'vasija'
-    ? 'Vasija ceremonial — réplica genérica · arrastrá para rotar'
-    : 'Cántaro de cerámica — réplica genérica · arrastrá para rotar';
-  setTimeout(() => etiquetaObra.classList.add('visible'), 500);
+  document.getElementById('vp-title').textContent=obra.nombre;
+  document.getElementById('vp-meta').textContent=`${obra.artista}  ·  ${obra.anio}  ·  ${obra.estilo}`;
+  document.getElementById('vp-emoji').textContent=obra.emoji;
+  document.getElementById('vp-char-name').textContent=`${obra.nombre} dice…`;
+  typewriterDialog(obra.intro);
+
+  const strip=document.getElementById('vp-info-strip');
+  strip.innerHTML=obra.infoStrip.map(it=>`
+    <div class="vis-item">
+      <span class="vis-icon">${it.icon}</span>
+      <span class="vis-label">${it.label}</span><br>
+      <span class="vis-value">${it.val}</span>
+    </div>`).join('');
+
+  const qaWrap=document.getElementById('vp-qa-buttons');
+  qaWrap.innerHTML='';
+  obra.qa.forEach(q=>{
+    const btn=document.createElement('button');
+    btn.className='qa-btn';btn.textContent=`❓ ${q.q}`;
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.qa-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      typewriterDialog(q.a,true);
+    });
+    qaWrap.appendChild(btn);
+  });
+
+  const lbl=document.getElementById('obj-label');
+  lbl.textContent=`${obra.nombre} · arrastrá para rotar`;
+  setTimeout(()=>lbl.classList.add('visible'),500);
+
+  irA('vitrina');
+
+  document.getElementById('btn-vitrina-back').classList.add('activo');
+  document.getElementById('btn-vitrina-reset').classList.add('activo');
+  document.getElementById('btn-vitrina-info').classList.add('activo');
 }
 
-function ocultarEscena3D() {
-  escena3dDiv.classList.remove('activa');
-  botonCerrar.classList.remove('activo');
-  botonResetVista.classList.remove('activo');
-  etiquetaObra.classList.remove('visible');
-  mostrarSala();
+function typewriterDialog(text,isAnswer=false){
+  const bubble=document.getElementById('vp-dialog-text');
+  bubble.classList.add('typing');
+  bubble.textContent='';
+  let i=0;
+  const full=isAnswer?`Respondiendo: "${obraActual.qa.find(q=>q.a===text)?.q||'…'}"\n\n${text}`:text;
+  const interval=setInterval(()=>{
+    bubble.textContent+=full[i++];
+    if(i>=full.length){bubble.classList.remove('typing');clearInterval(interval);}
+  },14);
 }
 
-botonCerrar.addEventListener('click', ocultarEscena3D);
-
-botonResetVista.addEventListener('click', () => {
-  anguloUsuario = 0;
-  anguloVertical = 0.15;
-  autoRotar = true;
+document.getElementById('btn-vitrina-back').addEventListener('click',()=>{
+  document.getElementById('obj-label').classList.remove('visible');
+  document.getElementById('btn-vitrina-back').classList.remove('activo');
+  document.getElementById('btn-vitrina-reset').classList.remove('activo');
+  document.getElementById('btn-vitrina-info').classList.remove('activo');
+  document.getElementById('vitrina-panel').classList.remove('abierto');
+  document.getElementById('btn-vitrina-info').classList.remove('abierto');
+  irA('sala');
 });
 
-function animarAparicion() {
-  const inicio = performance.now();
-  const duracion = 650;
-  function paso(ahora) {
-    const t = Math.min(1, (ahora - inicio) / duracion);
-    const easeOutBack = 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);
-    const s = Math.max(0, easeOutBack);
-    if (objetoActivo) objetoActivo.scale.setScalar((0.001 + s * 0.999) * 1.6);
-    if (t < 1) requestAnimationFrame(paso);
+document.getElementById('btn-vitrina-reset').addEventListener('click',()=>{angH=0;angV=0.18;autoRot=true;});
+
+document.getElementById('btn-vitrina-info').addEventListener('click',()=>{
+  const panel=document.getElementById('vitrina-panel');
+  const btn=document.getElementById('btn-vitrina-info');
+  const abierto=panel.classList.toggle('abierto');
+  btn.classList.toggle('abierto',abierto);
+});
+
+// ============================================================
+// GEOMETRÍAS 3D
+// ============================================================
+function crearGeometria(id){
+  switch(id){
+    case 'vasija':   return crearVasija();
+    case 'cantaro':  return crearCantaro();
+    case 'mascara':  return crearMascara();
+    case 'estatuilla':return crearEstatuilla();
+    default:         return crearVasija();
   }
-  requestAnimationFrame(paso);
 }
 
-function iniciarThreeVitrina() {
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  escena3dDiv.appendChild(renderer.domElement);
-
-  scene.add(new THREE.AmbientLight(0xfff3e0, 0.55));
-  const luzPrincipal = new THREE.DirectionalLight(0xffe9c7, 1.15);
-  luzPrincipal.position.set(3, 5, 4);
-  scene.add(luzPrincipal);
-  const luzRelleno = new THREE.DirectionalLight(0x9bb6cc, 0.35);
-  luzRelleno.position.set(-4, 1, -3);
-  scene.add(luzRelleno);
-  const luzCenital = new THREE.PointLight(0xffffff, 0.4, 12);
-  luzCenital.position.set(0, 4, 1);
-  scene.add(luzCenital);
-
-  const pedestal = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.05, 1.2, 0.4, 32),
-    new THREE.MeshStandardMaterial({ color: 0x2a2722, roughness: 0.85, metalness: 0.05 })
-  );
-  pedestal.position.y = -1.55;
-  scene.add(pedestal);
-
-  posicionarCamaraVitrina();
-  window.addEventListener('resize', alRedimensionarVitrina);
-
-  const dom = renderer.domElement;
-  dom.addEventListener('pointerdown', alPresionarVitrina);
-  dom.addEventListener('pointermove', alMoverVitrina);
-  dom.addEventListener('pointerup', alSoltarVitrina);
-  dom.addEventListener('pointercancel', alSoltarVitrina);
-  dom.addEventListener('pointerleave', alSoltarVitrina);
-
-  bucleAnimacionVitrina();
+function crearVasija(){
+  const pts=[
+    new THREE.Vector2(0.0,-1.3),new THREE.Vector2(0.32,-1.28),
+    new THREE.Vector2(0.46,-1.05),new THREE.Vector2(0.5,-0.6),
+    new THREE.Vector2(0.42,-0.1),new THREE.Vector2(0.58,0.35),
+    new THREE.Vector2(0.62,0.7),new THREE.Vector2(0.5,1.0),
+    new THREE.Vector2(0.34,1.18),new THREE.Vector2(0.3,1.3),
+    new THREE.Vector2(0.34,1.36),new THREE.Vector2(0.0,1.4),
+  ];
+  const geo=new THREE.LatheGeometry(pts,72);geo.computeVertexNormals();
+  const mat=new THREE.MeshStandardMaterial({color:0xb5602f,roughness:0.62,metalness:0.04});
+  const cuerpo=new THREE.Mesh(geo,mat);
+  const grupo=new THREE.Group();grupo.add(cuerpo);
+  const formaAsa=new THREE.TorusGeometry(0.33,0.045,10,24,Math.PI*1.15);
+  [-1,1].forEach(lado=>{
+    const asa=new THREE.Mesh(formaAsa,mat);
+    asa.position.set(lado*0.56,0.55,0);
+    asa.rotation.z=(lado>0?-1:1)*Math.PI/2.3;
+    if(lado<0)asa.rotation.y=Math.PI;
+    grupo.add(asa);
+  });
+  [-0.4,0.2,0.65].forEach(y=>{
+    const anillo=new THREE.Mesh(
+      new THREE.TorusGeometry(0.48+y*0.08,0.015,6,40),
+      new THREE.MeshStandardMaterial({color:0x7a3820,roughness:0.7})
+    );
+    anillo.rotation.x=Math.PI/2;anillo.position.y=y;grupo.add(anillo);
+  });
+  grupo.scale.setScalar(0.62);return grupo;
 }
 
-function cargarObjetoEnVitrina(idObra) {
-  if (objetoActivo) {
-    scene.remove(objetoActivo);
+function crearCantaro(){
+  const pts=[
+    new THREE.Vector2(0.0,-1.1),new THREE.Vector2(0.4,-1.08),
+    new THREE.Vector2(0.62,-0.75),new THREE.Vector2(0.68,-0.25),
+    new THREE.Vector2(0.6,0.15),new THREE.Vector2(0.4,0.45),
+    new THREE.Vector2(0.22,0.62),new THREE.Vector2(0.24,0.95),
+    new THREE.Vector2(0.3,1.0),new THREE.Vector2(0.0,1.05),
+  ];
+  const geo=new THREE.LatheGeometry(pts,60);geo.computeVertexNormals();
+  const mat=new THREE.MeshStandardMaterial({color:0x8a7256,roughness:0.8,metalness:0.02});
+  const cuerpo=new THREE.Mesh(geo,mat);
+  const grupo=new THREE.Group();grupo.add(cuerpo);
+  [[-0.35,0.64],[-0.1,0.62],[0.3,0.48]].forEach(([y,r])=>{
+    const anillo=new THREE.Mesh(
+      new THREE.TorusGeometry(r,0.018,7,40),
+      new THREE.MeshStandardMaterial({color:0x5c4a36,roughness:0.7})
+    );
+    anillo.rotation.x=Math.PI/2;anillo.position.y=y;grupo.add(anillo);
+  });
+  grupo.scale.setScalar(0.62);return grupo;
+}
+
+function crearMascara(){
+  const grupo=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0xb59a3a,roughness:0.45,metalness:0.55});
+  const matDark=new THREE.MeshStandardMaterial({color:0x7a6520,roughness:0.55,metalness:0.4});
+
+  const cara=new THREE.Mesh(new THREE.SphereGeometry(0.72,32,24),mat);
+  cara.scale.set(1,1.3,0.55);grupo.add(cara);
+
+  const frente=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.7,0.1),mat);
+  frente.position.set(0,0.5,0.3);grupo.add(frente);
+
+  [-0.26,0.26].forEach(x=>{
+    const ojo=new THREE.Mesh(new THREE.CircleGeometry(0.14,20),matDark);
+    ojo.scale.set(1,0.10/0.14,1);
+    ojo.position.set(x,0.1,0.35);grupo.add(ojo);
+    const pupila=new THREE.Mesh(new THREE.CircleGeometry(0.06,16),
+      new THREE.MeshStandardMaterial({color:0x0a0600}));
+    pupila.position.set(x,0.1,0.36);grupo.add(pupila);
+  });
+
+  const nariz=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.22,8),mat);
+  nariz.rotation.x=-Math.PI/2;nariz.position.set(0,-0.08,0.38);grupo.add(nariz);
+
+  const boca=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.07,0.06),matDark);
+  boca.position.set(0,-0.28,0.36);grupo.add(boca);
+
+  [-0.38,0,0.38].forEach(x=>{
+    const deco=new THREE.Mesh(
+      new THREE.TorusGeometry(0.12,0.035,8,16,Math.PI),
+      mat
+    );
+    deco.position.set(x,1.05,0.1);grupo.add(deco);
+  });
+
+  grupo.scale.setScalar(0.9);return grupo;
+}
+
+function crearEstatuilla(){
+  const grupo=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0xa05a2a,roughness:0.72,metalness:0.03});
+  const matOsc=new THREE.MeshStandardMaterial({color:0x6b3a1a,roughness:0.75});
+
+  const cuerpo=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.42,1.1,20),mat);
+  cuerpo.position.y=-0.1;grupo.add(cuerpo);
+
+  const cadera=new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.45,0.4,20),mat);
+  cadera.position.y=-0.65;grupo.add(cadera);
+
+  [-0.2,0.2].forEach(x=>{
+    const pierna=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.16,0.5,12),mat);
+    pierna.position.set(x,-1.05,0);grupo.add(pierna);
+    const pie=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.32),mat);
+    pie.position.set(x,-1.33,0.04);grupo.add(pie);
+  });
+
+  const torax=new THREE.Mesh(new THREE.SphereGeometry(0.36,16,12),mat);
+  torax.scale.set(1.1,0.75,0.65);torax.position.y=0.52;grupo.add(torax);
+
+  const cuello=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.18,0.22,12),mat);
+  cuello.position.y=0.95;grupo.add(cuello);
+
+  const cabeza=new THREE.Mesh(new THREE.SphereGeometry(0.26,20,16),mat);
+  cabeza.position.y=1.22;grupo.add(cabeza);
+
+  const cabello=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.27,0.3,16),matOsc);
+  cabello.position.y=1.5;grupo.add(cabello);
+
+  [-1,1].forEach(lado=>{
+    const brazo=new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.35, 8),mat);
+    brazo.position.set(lado*0.47,0.3,0);
+    brazo.rotation.z=lado*0.35;grupo.add(brazo);
+  });
+
+  grupo.scale.setScalar(0.65);return grupo;
+}
+
+// ============================================================
+// NAVEGACIÓN
+// ============================================================
+function irA(pantalla){
+  estadoActual=pantalla;
+  document.getElementById('screen-sala').classList.toggle('activa',pantalla==='sala');
+  document.getElementById('screen-vitrina').classList.toggle('activa',pantalla==='vitrina');
+  const gallery=document.getElementById('screen-gallery');
+  gallery.classList.toggle('activa',pantalla==='gallery');
+
+  if(pantalla==='sala'){
+    document.getElementById('scan-frame').classList.remove('locked');
+    document.getElementById('scan-status').innerHTML='<span class="pulse-dot"></span>Buscando obra…';
+    const btn=document.getElementById('btn-scan');
+    btn.disabled=true;btn.classList.remove('active');btn.textContent='Apuntá a una obra';
+    obraEnMira=null;
   }
-  objetoActivo = idObra === 'vasija' ? crearVasija() : crearCantaro();
-  objetoActivo.scale.setScalar(0.001);
-  objetoActivo.position.y = -0.1;
-  scene.add(objetoActivo);
-
-  anguloUsuario = 0;
-  anguloVertical = 0.15;
-  autoRotar = true;
+  if(pantalla==='welcome'){
+    document.getElementById('screen-welcome').style.display='flex';
+    document.getElementById('screen-welcome').style.opacity='1';
+  }
 }
 
-function posicionarCamaraVitrina() {
-  const x = radioCamara * Math.sin(anguloUsuario) * Math.cos(anguloVertical);
-  const y = radioCamara * Math.sin(anguloVertical) + 0.3;
-  const z = radioCamara * Math.cos(anguloUsuario) * Math.cos(anguloVertical);
-  camera.position.set(x, y, z);
-  camera.lookAt(0, 0, 0);
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2600);
 }
 
-function alPresionarVitrina(e) { arrastrando = true; autoRotar = false; ultimoX = e.clientX; ultimoY = e.clientY; }
-function alMoverVitrina(e) {
-  if (!arrastrando) return;
-  const dx = e.clientX - ultimoX;
-  const dy = e.clientY - ultimoY;
-  anguloUsuario -= dx * 0.006;
-  anguloVertical = Math.max(-0.5, Math.min(0.85, anguloVertical + dy * 0.005));
-  ultimoX = e.clientX; ultimoY = e.clientY;
-}
-function alSoltarVitrina() { arrastrando = false; }
+// ============================================================
+// INIT
+// ============================================================
+document.body.classList.add('ready');
 
-function alRedimensionarVitrina() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function bucleAnimacionVitrina() {
-  requestAnimationFrame(bucleAnimacionVitrina);
-  if (autoRotar && !arrastrando) anguloUsuario += 0.0028;
-  posicionarCamaraVitrina();
-  if (renderer && scene && camera) renderer.render(scene, camera);
-}
+document.getElementById('screen-gallery').addEventListener('transitionend',()=>{
+  if(estadoActual==='gallery') toast('Seleccioná una obra para entrar a la sala');
+},{once:true});
 </script>
 </body>
 </html>
