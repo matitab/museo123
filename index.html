@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Recorrido virtual museo — mové la cámara, apuntá a una obra y escaneala en 3D.">
+<title>Recorrido Virtual Museo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<style>
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #14110f;
+  font-family: "Saira", sans-serif;
+  font-optical-sizing: auto;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body { visibility: hidden; }
+body.visible { visibility: visible; }
+
+#pantalla-carga {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(ellipse at center, #2a2118 0%, #100d0a 75%);
+  z-index: 10010;
+  transition: opacity 0.7s ease;
+}
+#pantalla-carga.fade-out { opacity: 0; pointer-events: none; }
+#titulo-principal { text-align: center; color: #e9dfce; margin-bottom: 2.5rem; padding: 0 1.5rem; }
+#titulo-principal h1 { font-size: 1.9rem; font-weight: 600; letter-spacing: 0.06em; margin: 0; text-shadow: 0 0 0.4rem rgba(0,0,0,0.5); }
+#titulo-principal p { font-size: 0.85rem; opacity: 0.65; margin: 0.6rem 0 0; letter-spacing: 0.04em; }
+#boton-comenzar {
+  padding: 0.8em 2em; font-size: 1.05em; font-family: inherit; font-weight: 600; letter-spacing: 0.03em;
+  background-color: #952A2E; color: #f4ece1; border: none; border-radius: 2px; cursor: pointer;
+  transition: background-color 0.25s ease, transform 0.15s ease;
+}
+#boton-comenzar:hover { background-color: #b3373c; }
+#boton-comenzar:active { transform: scale(0.97); }
+
+/* ---------- Sala 360 (vista de cámara) ---------- */
+#vista-sala {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 9000;
+  display: none;
+}
+#vista-sala.activa { display: block; }
+#contenedor-sala { position: absolute; inset: 0; }
+#contenedor-sala canvas { display: block; touch-action: none; }
+
+#marco-escaneo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(58vw, 230px);
+  height: min(58vw, 230px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: border-color 0.25s ease;
+}
+#marco-escaneo .esquina {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 2.5px solid #d9c79a;
+  opacity: 0.8;
+  transition: border-color 0.25s ease, opacity 0.25s ease;
+}
+#marco-escaneo.enganchado .esquina { border-color: #7fd98a; opacity: 1; }
+#marco-escaneo .esquina.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+#marco-escaneo .esquina.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+#marco-escaneo .esquina.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+#marco-escaneo .esquina.br { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+#linea-escaneo {
+  position: absolute;
+  left: 4%; right: 4%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d9c79a, transparent);
+  top: 8%;
+  animation: barrido 2.1s ease-in-out infinite;
+  box-shadow: 0 0 8px 1px rgba(217,199,154,0.5);
+}
+#marco-escaneo.enganchado #linea-escaneo { animation-play-state: paused; opacity: 0; }
+@keyframes barrido {
+  0% { top: 8%; opacity: 0.9; }
+  48% { top: 88%; opacity: 0.9; }
+  50% { opacity: 0; }
+  52% { top: 8%; opacity: 0; }
+  60% { opacity: 0.9; }
+  100% { top: 8%; opacity: 0.9; }
+}
+
+#estado-escaneo {
+  position: absolute;
+  bottom: 16%;
+  left: 0; right: 0;
+  text-align: center;
+  color: #e9dfce;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  padding: 0 1.5rem;
+  min-height: 1.4em;
+  pointer-events: none;
+  text-shadow: 0 1px 5px rgba(0,0,0,0.7);
+}
+#estado-escaneo .punto-pulso {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: #c9a26a; margin-right: 8px; vertical-align: middle;
+  animation: pulso 1.1s ease-in-out infinite;
+}
+#estado-escaneo.enganchado .punto-pulso { background: #7fd98a; }
+@keyframes pulso { 0%,100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.1); } }
+
+#boton-tap-escanear {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(40,35,28,0.55);
+  border: 1px solid rgba(217,199,154,0.4);
+  color: rgba(233,223,206,0.45);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  padding: 0.6em 1.5em;
+  border-radius: 999px;
+  cursor: not-allowed;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease, transform 0.15s ease;
+}
+#boton-tap-escanear.habilitado {
+  background: rgba(127,217,138,0.18);
+  border-color: rgba(127,217,138,0.7);
+  color: #eaf7ec;
+  cursor: pointer;
+}
+#boton-tap-escanear.habilitado:active { transform: translateX(-50%) scale(0.96); }
+
+#indicador-arrastre {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20,17,15,0.55);
+  border: 1px solid rgba(217,199,154,0.3);
+  color: #d9c79a;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  padding: 5px 13px;
+  border-radius: 999px;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  white-space: nowrap;
+}
+#indicador-arrastre.visible { opacity: 0.85; }
+
+/* ---------- Escena 3D (objeto escaneado) ---------- */
+#escena-3d {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: none;
+  background: transparent;
+}
+#escena-3d.activa { display: block; }
+#escena-3d canvas { display: block; touch-action: none; }
+
+.boton-ui {
+  position: fixed;
+  background: rgba(20,17,15,0.5);
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(217,199,154,0.35);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  z-index: 9999;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.boton-ui:hover { transform: scale(1.08); background: rgba(20,17,15,0.75); }
+.boton-ui svg { width: 19px; height: 19px; stroke: #e9dfce; fill: none; }
+
+#boton-cerrar { top: 18px; left: 16px; display: none; }
+#boton-cerrar.activo { display: flex; }
+#boton-reset-vista { top: 18px; right: 16px; display: none; }
+#boton-reset-vista.activo { display: flex; }
+
+#etiqueta-obra {
+  position: fixed;
+  bottom: 28px;
+  left: 0; right: 0;
+  text-align: center;
+  color: #e9dfce;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  z-index: 9600;
+  pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+#etiqueta-obra.visible { opacity: 0.75; }
+
+@media screen and (max-width: 480px) {
+  #titulo-principal h1 { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<div id="pantalla-carga">
+  <div id="titulo-principal">
+    <h1>Recorrido Virtual Museo</h1>
+    <p>Mové la cámara, apuntá a una obra y escaneala</p>
+  </div>
+  <button id="boton-comenzar">Empezar recorrido</button>
+</div>
+
+<div id="vista-sala">
+  <div id="contenedor-sala"></div>
+
+  <div id="indicador-arrastre">arrastrá para mirar alrededor</div>
+
+  <div id="marco-escaneo">
+    <div class="esquina tl"></div>
+    <div class="esquina tr"></div>
+    <div class="esquina bl"></div>
+    <div class="esquina br"></div>
+    <div id="linea-escaneo"></div>
+  </div>
+
+  <div id="estado-escaneo"><span class="punto-pulso"></span>Buscando obra…</div>
+  <button id="boton-tap-escanear" disabled>Apuntá a una obra</button>
+</div>
+
+<div id="escena-3d"></div>
+
+<button id="boton-cerrar" class="boton-ui" title="Volver a la sala">
+  <svg viewBox="0 0 24 24" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+</button>
+
+<button id="boton-reset-vista" class="boton-ui" title="Centrar vista">
+  <svg viewBox="0 0 24 24" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
+</button>
+
+<div id="etiqueta-obra"></div>
+
+<script>
+// ============================================================
+// Recorrido Virtual Museo — maqueta
+// Flujo: carga -> sala 360 navegable -> al apuntar a una obra
+// se habilita "Escanear" -> escena 3D del objeto detectado.
+//
+// El punto de integración real con MindAR (cuando haya .mind
+// entrenados) está marcado abajo en CALCULAR_OBJETO_EN_MIRA.
+// Ahí es donde, en vez de raycasting contra objetos 3D propios,
+// se conectaría el evento targetFound/targetLost de MindAR.
+// ============================================================
+
+const pantallaCarga    = document.getElementById('pantalla-carga');
+const botonComenzar    = document.getElementById('boton-comenzar');
+const vistaSala        = document.getElementById('vista-sala');
+const contenedorSala   = document.getElementById('contenedor-sala');
+const marcoEscaneo     = document.getElementById('marco-escaneo');
+const estadoEscaneo    = document.getElementById('estado-escaneo');
+const botonTapEscanear = document.getElementById('boton-tap-escanear');
+const indicadorArrastre= document.getElementById('indicador-arrastre');
+const escena3dDiv      = document.getElementById('escena-3d');
+const botonCerrar      = document.getElementById('boton-cerrar');
+const botonResetVista  = document.getElementById('boton-reset-vista');
+const etiquetaObra     = document.getElementById('etiqueta-obra');
+
+document.body.classList.add('visible');
+
+// ---------- Paso 1: pantalla de carga ----------
+botonComenzar.addEventListener('click', () => {
+  pantallaCarga.classList.add('fade-out');
+  setTimeout(() => {
+    pantallaCarga.style.display = 'none';
+    mostrarSala();
+  }, 700);
+});
+
+function mostrarSala() {
+  vistaSala.classList.add('activa');
+  if (!salaIniciada) {
+    iniciarSala3D();
+    salaIniciada = true;
+  }
+  indicadorArrastre.classList.add('visible');
+  setTimeout(() => indicadorArrastre.classList.remove('visible'), 3200);
+}
+
+// ============================================================
+// SALA 360 — Three.js
+// Cámara fija en el centro, rotando el target (lookAt) según
+// el arrastre del usuario. Dos objetos colgados en ángulos
+// distintos sobre las paredes del cilindro. Cada frame se
+// calcula cuál objeto (si alguno) cae dentro del cono central
+// de la mira -> eso habilita el botón de escaneo.
+// ============================================================
+
+let salaIniciada = false;
+let rendererSala, sceneSala, cameraSala;
+let arrastrandoSala = false;
+let ultimoXSala = 0, ultimoYSala = 0;
+let yawSala = 0;     // rotación horizontal acumulada
+let pitchSala = 0;   // rotación vertical acumulada (limitada)
+
+const OBRAS = [
+  { id: 'vasija',  nombre: 'Vasija ceremonial',  angulo: 0,                 alto: 0 },
+  { id: 'cantaro', nombre: 'Cántaro de cerámica', angulo: Math.PI * 0.62,    alto: -0.1 },
+];
+
+let mallasObras = {}; // id -> THREE.Group
+let obraEnMira = null; // id de la obra actualmente enganchada, o null
+
+function iniciarSala3D() {
+  sceneSala = new THREE.Scene();
+
+  cameraSala = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 100);
+  cameraSala.position.set(0, 0, 0);
+
+  rendererSala = new THREE.WebGLRenderer({ antialias: true });
+  rendererSala.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  rendererSala.setSize(window.innerWidth, window.innerHeight);
+  rendererSala.outputColorSpace = THREE.SRGBColorSpace;
+  contenedorSala.appendChild(rendererSala.domElement);
+
+  construirSalaGeometria();
+  construirObras();
+  construirIluminacionSala();
+
+  actualizarMiradaCamara();
+
+  const dom = rendererSala.domElement;
+  dom.addEventListener('pointerdown', alPresionarSala);
+  dom.addEventListener('pointermove', alMoverSala);
+  dom.addEventListener('pointerup', alSoltarSala);
+  dom.addEventListener('pointercancel', alSoltarSala);
+  dom.addEventListener('pointerleave', alSoltarSala);
+  window.addEventListener('resize', alRedimensionarSala);
+
+  bucleAnimacionSala();
+}
+
+function construirSalaGeometria() {
+  const radioSala = 7;
+  const alturaSala = 5.2;
+
+  // -- textura de pared (canvas 2D: hueso + zócalo) --
+  const texturaPared = generarTexturaCanvas(512, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#e8e2d4';
+    ctx.fillRect(0, 0, w, h);
+    // zócalo inferior
+    ctx.fillStyle = '#c7bfa9';
+    ctx.fillRect(0, h * 0.82, w, h * 0.18);
+    ctx.fillStyle = '#a89c7e';
+    ctx.fillRect(0, h * 0.80, w, h * 0.02);
+    // leves franjas verticales (paneles) para dar escala
+    ctx.strokeStyle = 'rgba(150,140,115,0.25)';
+    ctx.lineWidth = 2;
+    for (let x = 0; x < w; x += w / 8) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h * 0.82);
+      ctx.stroke();
+    }
+    // moldura superior
+    ctx.fillStyle = '#d6cdb8';
+    ctx.fillRect(0, 0, w, h * 0.04);
+  });
+  texturaPared.wrapS = THREE.RepeatWrapping;
+  texturaPared.repeat.set(6, 1);
+
+  const geometriaPared = new THREE.CylinderGeometry(radioSala, radioSala, alturaSala, 48, 1, true);
+  const materialPared = new THREE.MeshStandardMaterial({
+    map: texturaPared,
+    side: THREE.BackSide,
+    roughness: 0.92,
+    metalness: 0.0,
+  });
+  const pared = new THREE.Mesh(geometriaPared, materialPared);
+  pared.position.y = 0;
+  sceneSala.add(pared);
+
+  // -- textura de piso (canvas 2D: tablones de madera) --
+  const texturaPiso = generarTexturaCanvas(512, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#8a5a36';
+    ctx.fillRect(0, 0, w, h);
+    const tablones = 10;
+    for (let i = 0; i < tablones; i++) {
+      const y = (h / tablones) * i;
+      const tono = 0.85 + Math.sin(i * 1.7) * 0.06;
+      ctx.fillStyle = `rgba(${Math.floor(120 * tono)}, ${Math.floor(78 * tono)}, ${Math.floor(46 * tono)}, 1)`;
+      ctx.fillRect(0, y, w, h / tablones);
+      ctx.strokeStyle = 'rgba(40,24,12,0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+  });
+  texturaPiso.wrapS = THREE.RepeatWrapping;
+  texturaPiso.wrapT = THREE.RepeatWrapping;
+  texturaPiso.repeat.set(5, 5);
+
+  const piso = new THREE.Mesh(
+    new THREE.CircleGeometry(radioSala, 48),
+    new THREE.MeshStandardMaterial({ map: texturaPiso, roughness: 0.75, metalness: 0.02 })
+  );
+  piso.rotation.x = -Math.PI / 2;
+  piso.position.y = -alturaSala / 2;
+  sceneSala.add(piso);
+
+  // -- techo simple --
+  const techo = new THREE.Mesh(
+    new THREE.CircleGeometry(radioSala, 48),
+    new THREE.MeshStandardMaterial({ color: 0xf3efe4, roughness: 0.95 })
+  );
+  techo.rotation.x = Math.PI / 2;
+  techo.position.y = alturaSala / 2;
+  sceneSala.add(techo);
+}
+
+function generarTexturaCanvas(w, h, fnDibujo) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  fnDibujo(ctx, w, h);
+  const textura = new THREE.CanvasTexture(canvas);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  return textura;
+}
+
+function construirIluminacionSala() {
+  sceneSala.add(new THREE.AmbientLight(0xfff6e8, 0.7));
+
+  const luzCenital1 = new THREE.PointLight(0xfff0d8, 0.9, 14);
+  luzCenital1.position.set(2.5, 2.2, 1);
+  sceneSala.add(luzCenital1);
+
+  const luzCenital2 = new THREE.PointLight(0xfff0d8, 0.9, 14);
+  luzCenital2.position.set(-2.5, 2.2, -2);
+  sceneSala.add(luzCenital2);
+
+  const luzRelleno = new THREE.DirectionalLight(0xffffff, 0.25);
+  luzRelleno.position.set(0, 3, 0);
+  sceneSala.add(luzRelleno);
+}
+
+function construirObras() {
+  const radioColocacion = 4.6;
+
+  OBRAS.forEach((obra) => {
+    const grupo = obra.id === 'vasija' ? crearVasija() : crearCantaro();
+
+    const x = radioColocacion * Math.sin(obra.angulo);
+    const z = -radioColocacion * Math.cos(obra.angulo);
+    grupo.position.set(x, obra.alto, z);
+    grupo.lookAt(0, obra.alto, 0);
+
+    // pedestal bajo cada obra
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.58, 0.85, 24),
+      new THREE.MeshStandardMaterial({ color: 0x2f2b24, roughness: 0.85, metalness: 0.04 })
+    );
+    pedestal.position.set(x, -1.78, z);
+    sceneSala.add(pedestal);
+
+    sceneSala.add(grupo);
+    mallasObras[obra.id] = grupo;
+  });
+}
+
+function crearVasija() {
+  const puntos = [
+    new THREE.Vector2(0.0, -1.3), new THREE.Vector2(0.32, -1.28),
+    new THREE.Vector2(0.46, -1.05), new THREE.Vector2(0.5, -0.6),
+    new THREE.Vector2(0.42, -0.1), new THREE.Vector2(0.58, 0.35),
+    new THREE.Vector2(0.62, 0.7), new THREE.Vector2(0.5, 1.0),
+    new THREE.Vector2(0.34, 1.18), new THREE.Vector2(0.3, 1.3),
+    new THREE.Vector2(0.34, 1.36), new THREE.Vector2(0.0, 1.4),
+  ];
+  const geometria = new THREE.LatheGeometry(puntos, 64);
+  geometria.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({ color: 0xb5602f, roughness: 0.62, metalness: 0.04 });
+  const cuerpo = new THREE.Mesh(geometria, material);
+
+  const grupo = new THREE.Group();
+  grupo.add(cuerpo);
+
+  const formaAsa = new THREE.TorusGeometry(0.33, 0.045, 10, 24, Math.PI * 1.15);
+  const asaIzq = new THREE.Mesh(formaAsa, material);
+  asaIzq.position.set(-0.56, 0.55, 0);
+  asaIzq.rotation.z = Math.PI / 2.3;
+  asaIzq.rotation.y = Math.PI;
+  grupo.add(asaIzq);
+
+  const asaDer = new THREE.Mesh(formaAsa, material);
+  asaDer.position.set(0.56, 0.55, 0);
+  asaDer.rotation.z = -Math.PI / 2.3;
+  grupo.add(asaDer);
+
+  grupo.scale.setScalar(0.62);
+  return grupo;
+}
+
+function crearCantaro() {
+  // perfil más bajo y panzón, sin asas, con cuello angosto
+  const puntos = [
+    new THREE.Vector2(0.0,  -1.1),
+    new THREE.Vector2(0.4,  -1.08),
+    new THREE.Vector2(0.62, -0.75),
+    new THREE.Vector2(0.68, -0.25),
+    new THREE.Vector2(0.6,   0.15),
+    new THREE.Vector2(0.4,   0.45),
+    new THREE.Vector2(0.22,  0.62),
+    new THREE.Vector2(0.24,  0.95),
+    new THREE.Vector2(0.3,   1.0),
+    new THREE.Vector2(0.0,   1.05),
+  ];
+  const geometria = new THREE.LatheGeometry(puntos, 56);
+  geometria.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({ color: 0x8a7256, roughness: 0.78, metalness: 0.02 });
+  const cuerpo = new THREE.Mesh(geometria, material);
+
+  // un par de líneas grabadas simples (toroides finos) como decoración
+  const anillo = new THREE.Mesh(
+    new THREE.TorusGeometry(0.64, 0.018, 8, 40),
+    new THREE.MeshStandardMaterial({ color: 0x5c4a36, roughness: 0.7 })
+  );
+  anillo.position.y = -0.35;
+  anillo.rotation.x = Math.PI / 2;
+
+  const grupo = new THREE.Group();
+  grupo.add(cuerpo);
+  grupo.add(anillo);
+  grupo.scale.setScalar(0.62);
+  return grupo;
+}
+
+// ---------- control de arrastre (orbital, mirando desde el centro) ----------
+
+function alPresionarSala(e) {
+  arrastrandoSala = true;
+  ultimoXSala = e.clientX;
+  ultimoYSala = e.clientY;
+}
+
+function alMoverSala(e) {
+  if (!arrastrandoSala) return;
+  const dx = e.clientX - ultimoXSala;
+  const dy = e.clientY - ultimoYSala;
+  yawSala -= dx * 0.0045;
+  pitchSala = Math.max(-0.55, Math.min(0.55, pitchSala - dy * 0.0035));
+  ultimoXSala = e.clientX;
+  ultimoYSala = e.clientY;
+  actualizarMiradaCamara();
+}
+
+function alSoltarSala() {
+  arrastrandoSala = false;
+}
+
+function actualizarMiradaCamara() {
+  const dirX = Math.sin(yawSala) * Math.cos(pitchSala);
+  const dirY = Math.sin(pitchSala);
+  const dirZ = -Math.cos(yawSala) * Math.cos(pitchSala);
+  cameraSala.lookAt(dirX, dirY, dirZ);
+}
+
+function alRedimensionarSala() {
+  if (!cameraSala || !rendererSala) return;
+  cameraSala.aspect = window.innerWidth / window.innerHeight;
+  cameraSala.updateProjectionMatrix();
+  rendererSala.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ---------- CALCULAR_OBJETO_EN_MIRA ----------
+// Punto de integración: hoy compara el centro de mira contra
+// posiciones 3D propias. El día que haya .mind reales, esto se
+// reemplaza por el callback targetFound de MindAR, que ya trae
+// el id del marcador detectado.
+const UMBRAL_ANGULAR = 0.19; // radianes de tolerancia del cono de mira
+
+function calcularObjetoEnMira() {
+  const dirMira = new THREE.Vector3(
+    Math.sin(yawSala) * Math.cos(pitchSala),
+    Math.sin(pitchSala),
+    -Math.cos(yawSala) * Math.cos(pitchSala)
+  ).normalize();
+
+  let mejorId = null;
+  let mejorAngulo = Infinity;
+
+  OBRAS.forEach((obra) => {
+    const malla = mallasObras[obra.id];
+    if (!malla) return;
+    const dirObjeto = malla.position.clone().normalize();
+    const angulo = dirMira.angleTo(dirObjeto);
+    if (angulo < UMBRAL_ANGULAR && angulo < mejorAngulo) {
+      mejorAngulo = angulo;
+      mejorId = obra.id;
+    }
+  });
+
+  return mejorId;
+}
+
+function nombrePorId(id) {
+  const obra = OBRAS.find((o) => o.id === id);
+  return obra ? obra.nombre : '';
+}
+
+function actualizarUIDeMira() {
+  const idDetectado = calcularObjetoEnMira();
+
+  if (idDetectado !== obraEnMira) {
+    obraEnMira = idDetectado;
+
+    if (obraEnMira) {
+      marcoEscaneo.classList.add('enganchado');
+      estadoEscaneo.classList.add('enganchado');
+      estadoEscaneo.innerHTML = `<span class="punto-pulso"></span>${nombrePorId(obraEnMira)} detectada`;
+      botonTapEscanear.disabled = false;
+      botonTapEscanear.classList.add('habilitado');
+      botonTapEscanear.textContent = `Escanear ${nombrePorId(obraEnMira)}`;
+    } else {
+      marcoEscaneo.classList.remove('enganchado');
+      estadoEscaneo.classList.remove('enganchado');
+      estadoEscaneo.innerHTML = '<span class="punto-pulso"></span>Buscando obra…';
+      botonTapEscanear.disabled = true;
+      botonTapEscanear.classList.remove('habilitado');
+      botonTapEscanear.textContent = 'Apuntá a una obra';
+    }
+  }
+}
+
+function bucleAnimacionSala() {
+  requestAnimationFrame(bucleAnimacionSala);
+  if (vistaSala.classList.contains('activa')) {
+    actualizarUIDeMira();
+    rendererSala.render(sceneSala, cameraSala);
+  }
+}
+
+// ---------- disparo del escaneo ----------
+botonTapEscanear.addEventListener('click', () => {
+  if (!obraEnMira) return;
+  dispararSecuenciaDeteccion(obraEnMira);
+});
+
+function dispararSecuenciaDeteccion(idObra) {
+  botonTapEscanear.disabled = true;
+  estadoEscaneo.innerHTML = `<span class="punto-pulso" style="background:#7fd98a"></span>Procesando ${nombrePorId(idObra)}…`;
+
+  setTimeout(() => {
+    vistaSala.classList.remove('activa');
+    mostrarEscena3D(idObra);
+  }, 900);
+}
+
+// ============================================================
+// ESCENA 3D — vitrina del objeto escaneado
+// ============================================================
+let threeIniciado = false;
+let renderer, scene, camera, objetoActivo;
+let arrastrando = false;
+let anguloUsuario = 0;
+let anguloVertical = 0.15;
+let ultimoX = 0, ultimoY = 0;
+let autoRotar = true;
+let radioCamara = 5.2;
+
+function mostrarEscena3D(idObra) {
+  escena3dDiv.classList.add('activa');
+  botonCerrar.classList.add('activo');
+  botonResetVista.classList.add('activo');
+
+  if (!threeIniciado) {
+    iniciarThreeVitrina();
+    threeIniciado = true;
+  }
+
+  cargarObjetoEnVitrina(idObra);
+  animarAparicion();
+
+  etiquetaObra.textContent = idObra === 'vasija'
+    ? 'Vasija ceremonial — réplica genérica · arrastrá para rotar'
+    : 'Cántaro de cerámica — réplica genérica · arrastrá para rotar';
+  setTimeout(() => etiquetaObra.classList.add('visible'), 500);
+}
+
+function ocultarEscena3D() {
+  escena3dDiv.classList.remove('activa');
+  botonCerrar.classList.remove('activo');
+  botonResetVista.classList.remove('activo');
+  etiquetaObra.classList.remove('visible');
+  mostrarSala();
+}
+
+botonCerrar.addEventListener('click', ocultarEscena3D);
+
+botonResetVista.addEventListener('click', () => {
+  anguloUsuario = 0;
+  anguloVertical = 0.15;
+  autoRotar = true;
+});
+
+function animarAparicion() {
+  const inicio = performance.now();
+  const duracion = 650;
+  function paso(ahora) {
+    const t = Math.min(1, (ahora - inicio) / duracion);
+    const easeOutBack = 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);
+    const s = Math.max(0, easeOutBack);
+    if (objetoActivo) objetoActivo.scale.setScalar((0.001 + s * 0.999) * 1.6);
+    if (t < 1) requestAnimationFrame(paso);
+  }
+  requestAnimationFrame(paso);
+}
+
+function iniciarThreeVitrina() {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  escena3dDiv.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xfff3e0, 0.55));
+  const luzPrincipal = new THREE.DirectionalLight(0xffe9c7, 1.15);
+  luzPrincipal.position.set(3, 5, 4);
+  scene.add(luzPrincipal);
+  const luzRelleno = new THREE.DirectionalLight(0x9bb6cc, 0.35);
+  luzRelleno.position.set(-4, 1, -3);
+  scene.add(luzRelleno);
+  const luzCenital = new THREE.PointLight(0xffffff, 0.4, 12);
+  luzCenital.position.set(0, 4, 1);
+  scene.add(luzCenital);
+
+  const pedestal = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.05, 1.2, 0.4, 32),
+    new THREE.MeshStandardMaterial({ color: 0x2a2722, roughness: 0.85, metalness: 0.05 })
+  );
+  pedestal.position.y = -1.55;
+  scene.add(pedestal);
+
+  posicionarCamaraVitrina();
+  window.addEventListener('resize', alRedimensionarVitrina);
+
+  const dom = renderer.domElement;
+  dom.addEventListener('pointerdown', alPresionarVitrina);
+  dom.addEventListener('pointermove', alMoverVitrina);
+  dom.addEventListener('pointerup', alSoltarVitrina);
+  dom.addEventListener('pointercancel', alSoltarVitrina);
+  dom.addEventListener('pointerleave', alSoltarVitrina);
+
+  bucleAnimacionVitrina();
+}
+
+function cargarObjetoEnVitrina(idObra) {
+  if (objetoActivo) {
+    scene.remove(objetoActivo);
+  }
+  objetoActivo = idObra === 'vasija' ? crearVasija() : crearCantaro();
+  objetoActivo.scale.setScalar(0.001);
+  objetoActivo.position.y = -0.1;
+  scene.add(objetoActivo);
+
+  anguloUsuario = 0;
+  anguloVertical = 0.15;
+  autoRotar = true;
+}
+
+function posicionarCamaraVitrina() {
+  const x = radioCamara * Math.sin(anguloUsuario) * Math.cos(anguloVertical);
+  const y = radioCamara * Math.sin(anguloVertical) + 0.3;
+  const z = radioCamara * Math.cos(anguloUsuario) * Math.cos(anguloVertical);
+  camera.position.set(x, y, z);
+  camera.lookAt(0, 0, 0);
+}
+
+function alPresionarVitrina(e) { arrastrando = true; autoRotar = false; ultimoX = e.clientX; ultimoY = e.clientY; }
+function alMoverVitrina(e) {
+  if (!arrastrando) return;
+  const dx = e.clientX - ultimoX;
+  const dy = e.clientY - ultimoY;
+  anguloUsuario -= dx * 0.006;
+  anguloVertical = Math.max(-0.5, Math.min(0.85, anguloVertical + dy * 0.005));
+  ultimoX = e.clientX; ultimoY = e.clientY;
+}
+function alSoltarVitrina() { arrastrando = false; }
+
+function alRedimensionarVitrina() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function bucleAnimacionVitrina() {
+  requestAnimationFrame(bucleAnimacionVitrina);
+  if (autoRotar && !arrastrando) anguloUsuario += 0.0028;
+  posicionarCamaraVitrina();
+  if (renderer && scene && camera) renderer.render(scene, camera);
+}
+</script>
+</body>
+</html>
